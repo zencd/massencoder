@@ -1,0 +1,55 @@
+import os
+import re
+from pathlib import Path
+
+
+def read_list(fname):
+    with open(fname, encoding='utf-8') as f:
+        lines = f.readlines()
+        lines = filter(lambda x: not re.match(r'^\s*#.*', x), lines)  # drop comments
+        lines = map(str.strip, lines)
+        lines = filter(bool, lines)
+        return list(lines)
+
+
+def append_file(list_file, line):
+    with open(list_file, 'a', encoding='utf-8') as f:
+        f.write(line + '\n')
+
+
+def write_file(list_file, text: str):
+    with open(list_file, 'w', encoding='utf-8') as f:
+        f.write(text)
+
+
+def create_dirs_for_file(file: Path):
+    file.parent.mkdir(parents=True, exist_ok=True)
+
+
+def hms(seconds: int) -> str:
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+def dhms(seconds: int) -> str:
+    days, rem = divmod(seconds, 24 * 3600)
+    return (f'{days}d ' if days else '') + hms(rem)
+
+
+class PersistentList:
+    def __init__(self, fname: str):
+        self.fname = fname
+        self.lines: list[str] = read_list(fname) if os.path.exists(self.fname) else []
+
+    def add(self, line: str):
+        self.lines.append(line)
+        write_file(self.fname, '\n'.join(self.lines))
+
+    # def remove(self, line: str):
+    #     self.lines.remove(line)
+    #     write_file(self.fname, '\n'.join(self.lines))
+
+    def reload(self):
+        self.lines = read_list(self.fname)
