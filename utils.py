@@ -2,6 +2,19 @@ import os
 import re
 from pathlib import Path
 
+import winsound
+
+
+def is_same_volume(one: Path, two: Path):
+    return os.stat(str(one)).st_dev == os.stat(str(two)).st_dev
+
+
+def bell():
+    winsound.Beep(1000, 300)  # windows
+    # os.system("beep -f 1000 -l 300") # nix
+    # sys.stdout.write('\a') # does not work at pycharm+windows
+    # sys.stdout.flush()
+
 
 def read_list(fname):
     with open(fname, encoding='utf-8') as f:
@@ -26,7 +39,8 @@ def create_dirs_for_file(file: Path):
     file.parent.mkdir(parents=True, exist_ok=True)
 
 
-def hms(seconds: int) -> str:
+def hms(seconds) -> str:
+    seconds = int(seconds)
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
     secs = seconds % 60
