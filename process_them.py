@@ -157,7 +157,8 @@ def main():
             que.reload()
             file_is_ok_to_process = lambda fn: (fn not in success.lines) and \
                                                (fn not in errors.lines) and \
-                                               os.path.exists(fn)
+                                               os.path.exists(fn) and \
+                                               os.path.isfile(fn)
             files_to_process = [fn for fn in que.lines if file_is_ok_to_process(fn)]
             files_to_process = list(dict.fromkeys(files_to_process))  # del duplicates
             for f in files_to_process:
