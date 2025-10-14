@@ -1,1 +1,1 @@
-Mass video re-encoder
+Mass video encoder
