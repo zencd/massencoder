@@ -192,7 +192,7 @@ if __name__ == '__main__':
             t1 = datetime.datetime.now()
             main()
             t2 = datetime.datetime.now()
-            print(f'Total processing time: {t2 - t1}')
+            print(f'Total processing time: {t2 - t1}, now {datetime.datetime.now()}')
     except KeyboardInterrupt:
         stop()
         print('Bye!')
