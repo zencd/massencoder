@@ -53,7 +53,7 @@ def replace_in_list(lst: list, src: str, dst: str):
     return [(dst if s == src else s) for s in lst]
 
 
-def verify_via_decoding_call_ffmpeg(f: Path):
+def verify_via_decoding_ffmpeg(f: Path):
     cmd = 'ffmpeg -v error -i {} -f null -'
     cmd = replace_in_list(cmd.split(' '), '{}', str(f))
     errors = []
@@ -77,7 +77,7 @@ def verify_via_decoding():
     okays, bads = 0, 0
     for f in process_them.PROCESSED_INPUT_DIR.rglob('*'):
         # print(f)
-        res = verify_via_decoding_call_ffmpeg(f)
+        res = verify_via_decoding_ffmpeg(f)
         if res:
             okays += 1
         else:
