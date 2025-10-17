@@ -1,4 +1,5 @@
 import subprocess
+from pathlib import Path
 
 import process_them
 
@@ -27,5 +28,67 @@ def verify_missing_files():
         print(f'FAILED verify_missing_files: {diff}')
 
 
-verify_bad_ext()
-verify_missing_files()
+def _verify_frames(f: Path):
+    raise Exception('gives errors on correct files, those with open-gop != 0')
+    tpl = 'ffprobe -v error -skip_frame nokey -select_streams v:0 -show_entries frame=pts_time -of csv=p=0'.split(' ')
+    cmd = tpl + [str(f)]
+    errors = []
+    with subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding='utf-8') as p:
+        for error in p.stderr:
+            error = error.strip()
+            errors.append(error)
+            if len(errors) >= 3:
+                p.terminate()
+                break
+    if errors:
+        print(f'ERROR {f}')
+        for error in errors:
+            print(f'> {error}')
+    else:
+        print(f'OKAY  {f}')
+    return not bool(errors)
+
+
+def replace_in_list(lst: list, src: str, dst: str):
+    return [(dst if s == src else s) for s in lst]
+
+
+def verify_via_decoding_call_ffmpeg(f: Path):
+    cmd = 'ffmpeg -v error -i {} -f null -'
+    cmd = replace_in_list(cmd.split(' '), '{}', str(f))
+    errors = []
+    with subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding='utf-8') as p:
+        for error in p.stderr:
+            error = error.strip()
+            errors.append(error)
+            if len(errors) >= 3:
+                p.terminate()
+                break
+    if errors:
+        print(f'ERROR {f}')
+        for error in errors:
+            print(f'> {error}')
+    else:
+        print(f'OKAY  {f}')
+    return not bool(errors)
+
+
+def verify_via_decoding():
+    okays, bads = 0, 0
+    for f in process_them.PROCESSED_INPUT_DIR.rglob('*'):
+        # print(f)
+        res = verify_via_decoding_call_ffmpeg(f)
+        if res:
+            okays += 1
+        else:
+            bads += 1
+    print(f'okays: {okays}')
+    print(f'bads: {bads}')
+
+
+if __name__ == '__main__':
+    # verify_bad_ext()
+    # verify_missing_files()
+    verify_via_decoding()
+    # verify_via_decoding(Path('D:/vikorzu-d/reenc-done-output/1ы.mkv'))
+    # verify_via_decoding_call_ffmpeg(Path('D:/vikorzu-d/reenc-done-output/xxx.mkv'))
