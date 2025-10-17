@@ -1,3 +1,4 @@
+import verify
 import datetime
 import os.path
 import re
@@ -25,9 +26,9 @@ OUT_DIR = BASE_DIR / 'reenc-done-output'
 PROCESSED_INPUT_DIR = BASE_DIR / 'reenc-done-input'
 TMP_OUT_DIR = BASE_DIR / 'reenc-work'
 ENCODER = 'libx265'
-VIDEO = f'-c:v {ENCODER} -crf 26 -preset medium'
+VIDEO = f'-c:v {ENCODER} -x265-params open-gop=0 -crf 26 -preset medium -pix_fmt yuv420p'
 AUDIO = f'-c:a aac -b:a 128k -ac 2'
-FFMPEG_PARAMS = f'{VIDEO} {AUDIO}'
+FFMPEG_PARAMS = f'{VIDEO} {AUDIO} -avoid_negative_ts 1 -reset_timestamps 1'
 TARGET_EXT = 'mkv'
 
 que = PersistentList('list-que.txt')
@@ -93,30 +94,36 @@ def resolve_target_video_path(video_src: Path, target_dir: Path):
 
 def process_video(task: EncodingTask):
     global is_working
-    video_src = task.video_src
-    out_moved_file = resolve_target_video_path(video_src, OUT_DIR)
-    src_moved_file = PROCESSED_INPUT_DIR / video_src.name
-    create_dirs_for_file(out_moved_file)
-    create_dirs_for_file(src_moved_file)
-    dur = get_video_time(video_src)
-    print(f'Processing video: {video_src}, duration: {hms(dur)}')
-    out_file = resolve_target_video_path(video_src, TMP_OUT_DIR)
-    create_dirs_for_file(out_file)
-    rc = call_ffmpeg(video_src, out_file, task)
-    if rc == 0:
-        print(f'move {out_file} => {out_moved_file})')
-        shutil.move(out_file, out_moved_file)
-        success.add(str(video_src))
-        print(f'move {video_src} => {src_moved_file}')
-        shutil.move(video_src, src_moved_file)
-    elif rc == 255:
-        print('Ctrl+C detected on ffmpeg')
-        is_working = False
-    else:
-        print(f'ffmpeg finished with rc: {rc}')
-        errors.add(str(video_src))
-    task.finished = True
-    bell()
+    try:
+        video_src = task.video_src
+        out_moved_file = resolve_target_video_path(video_src, OUT_DIR)
+        src_moved_file = PROCESSED_INPUT_DIR / video_src.name
+        create_dirs_for_file(out_moved_file)
+        create_dirs_for_file(src_moved_file)
+        dur = get_video_time(video_src)
+        print(f'Processing video: {video_src}, duration: {hms(dur)}')
+        out_tmp_file = resolve_target_video_path(video_src, TMP_OUT_DIR)
+        create_dirs_for_file(out_tmp_file)
+        rc = call_ffmpeg(video_src, out_tmp_file, task)
+        if rc == 0:
+            if not verify.verify_via_decoding_ffmpeg(out_tmp_file):
+                is_working = False
+                return
+            print(f'move {out_tmp_file} => {out_moved_file})')
+            shutil.move(out_tmp_file, out_moved_file)
+            success.add(str(video_src))
+            print(f'move {video_src} => {src_moved_file}')
+            shutil.move(video_src, src_moved_file)
+        elif rc == 255:
+            print('Ctrl+C detected on ffmpeg')
+            is_working = False
+        else:
+            print(f'ffmpeg finished with rc: {rc}')
+            errors.add(str(video_src))
+            is_working = False
+    finally:
+        task.finished = True
+        bell()
 
 
 def worker(task: EncodingTask):
