@@ -1,3 +1,4 @@
+import datetime
 import subprocess
 from pathlib import Path
 
@@ -54,7 +55,9 @@ def replace_in_list(lst: list, src: str, dst: str):
 
 
 def verify_via_decoding_ffmpeg(f: Path):
-    cmd = 'ffmpeg -v error -i {} -f null -'
+    # -skip_frame nokey -- very fast, 7:25:00/minute, but it checks keyframes only
+    # full check takes 1:25:00/minute
+    cmd = 'ffmpeg -v error -skip_frame nokey -i {} -f null -'
     cmd = replace_in_list(cmd.split(' '), '{}', str(f))
     errors = []
     with subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding='utf-8') as p:
@@ -89,6 +92,10 @@ def verify_via_decoding():
 if __name__ == '__main__':
     # verify_bad_ext()
     # verify_missing_files()
-    verify_via_decoding()
+    # verify_via_decoding()
     # verify_via_decoding(Path('D:/vikorzu-d/reenc-done-output/1ы.mkv'))
-    # verify_via_decoding_call_ffmpeg(Path('D:/vikorzu-d/reenc-done-output/xxx.mkv'))
+    t1 = datetime.datetime.now()
+    verify_via_decoding_ffmpeg(Path('D:/vikorzu-d/reenc-done-output/В главных ролях： Юра Борисов  [795374dd-5690-45aa-bf80-768f3cffaafe].mkv'))
+    # verify_via_decoding_ffmpeg(Path('D:/vikorzu-d/reenc-done-output/Чужой Земля 6.mkv'))
+    t2 = datetime.datetime.now()
+    print(f'took: {t2 - t1}')

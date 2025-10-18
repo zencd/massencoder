@@ -1,6 +1,7 @@
 import os
 import re
 from pathlib import Path
+from typing import Union
 
 
 def is_same_volume(one: Path, two: Path):
@@ -40,7 +41,7 @@ def create_dirs_for_file(file: Path):
     file.parent.mkdir(parents=True, exist_ok=True)
 
 
-def hms(seconds) -> str:
+def hms(seconds: Union[int,float]) -> str:
     seconds = int(seconds)
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
@@ -48,7 +49,8 @@ def hms(seconds) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
-def dhms(seconds: int) -> str:
+def dhms(seconds: Union[int,float]) -> str:
+    seconds = int(seconds)
     days, rem = divmod(seconds, 24 * 3600)
     return (f'{days}d ' if days else '') + hms(rem)
 

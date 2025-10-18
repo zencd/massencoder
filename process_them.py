@@ -38,6 +38,7 @@ errors = PersistentList('list-error.txt')
 is_working = True
 total_src_seconds = 0
 global_executor: typing.Optional[ThreadPoolExecutor] = None
+g_recent_task: typing.Optional['EncodingTask'] = None
 
 if TARGET_EXT == 'mp4' and ENCODER == 'libx265':
     assert '-tag:v hvc1' in FFMPEG_PARAMS
@@ -52,10 +53,12 @@ if TARGET_EXT == 'mkv':
 
 
 class EncodingTask:
-    def __init__(self, video_src):
+    def __init__(self, video_src: str, video_len: int):
         self.video_src = Path(video_src)
+        self.video_len = video_len
         self.seconds_processed = 0
         self.finished = False
+        self.time_started = datetime.datetime.now()
 
 
 def get_video_time(video: Path):
@@ -93,22 +96,26 @@ def resolve_target_video_path(video_src: Path, target_dir: Path):
 
 
 def process_video(task: EncodingTask):
-    global is_working
+    global is_working, g_recent_task
     try:
+        g_recent_task = task
+        task.time_started = datetime.datetime.now()
         video_src = task.video_src
         out_moved_file = resolve_target_video_path(video_src, OUT_DIR)
         src_moved_file = PROCESSED_INPUT_DIR / video_src.name
         create_dirs_for_file(out_moved_file)
         create_dirs_for_file(src_moved_file)
-        dur = get_video_time(video_src)
-        print(f'Processing video: {video_src}, duration: {hms(dur)}')
+        print(f'Processing video: {video_src}, duration: {hms(task.video_len)}, started: {task.time_started}')
         out_tmp_file = resolve_target_video_path(video_src, TMP_OUT_DIR)
         create_dirs_for_file(out_tmp_file)
         rc = call_ffmpeg(video_src, out_tmp_file, task)
         if rc == 0:
+            print(f'Ffmpeg finished - verifying it: {video_src}')
             if not verify.verify_via_decoding_ffmpeg(out_tmp_file):
+                print(f'Video verification FAILED, gonna stop: {video_src}')
                 is_working = False
                 return
+            print(f'Video verified successfully: {video_src}')
             print(f'move {out_tmp_file} => {out_moved_file})')
             shutil.move(out_tmp_file, out_moved_file)
             success.add(str(video_src))
@@ -118,7 +125,7 @@ def process_video(task: EncodingTask):
             print('Ctrl+C detected on ffmpeg')
             is_working = False
         else:
-            print(f'ffmpeg finished with rc: {rc}')
+            print(f'Ffmpeg finished with rc: {rc}')
             errors.add(str(video_src))
             is_working = False
     finally:
@@ -132,22 +139,31 @@ def worker(task: EncodingTask):
     return task
 
 
+def calc_progress(seconds_processed: int, total_seconds: int, delta: datetime.timedelta):
+    if total_seconds:
+        percent = seconds_processed / total_seconds * 100.0
+        elapsed = delta.total_seconds()
+        if percent > 0 and elapsed > 0:
+            expected_total_time = elapsed * 100 / percent
+            eta = expected_total_time - elapsed
+            speed = seconds_processed / elapsed
+            return percent, eta, speed
+    return 0, 0, 0
+
+
 def progress_thread(tasks: list[EncodingTask]):
     global total_src_seconds
     t1 = datetime.datetime.now()
     while is_working:
         t2 = datetime.datetime.now()
-        if t2 > t1:
-            total_processed = sum(t.seconds_processed for t in tasks)
-            percent = total_processed / total_src_seconds * 100.0
-            if percent > 0:
-                num_tasks_remaining = sum(1 for t in tasks if not t.finished)
-                elapsed = (t2 - t1).total_seconds()
-                expected_total_time = elapsed * 100 / percent
-                eta = expected_total_time - elapsed
-                speed = total_processed / elapsed
-                msg = f'\rTotal progress: {percent:.3f}%, ETA {hms(int(eta))}, {speed:.2f}x, {total_processed}/{total_src_seconds}, {num_tasks_remaining} tasks'
-                sys.stdout.write(msg)
+        total_processed = sum(t.seconds_processed for t in tasks)
+        percent1, eta1, speed1 = calc_progress(total_processed, total_src_seconds, t2 - t1)
+        percent2, eta2, speed2 = calc_progress(g_recent_task.seconds_processed, g_recent_task.video_len, t2 - g_recent_task.time_started) \
+            if g_recent_task and not g_recent_task.finished \
+            else (0, 0, 0)
+        num_tasks_remaining = sum(1 for t in tasks if not t.finished)
+        msg = f'\rTotal: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | Last: ETA {hms(eta2)}'
+        sys.stdout.write(msg)
         time.sleep(1.0)
 
 
@@ -159,7 +175,7 @@ def stop():
         global_executor.shutdown()
 
 
-def main():
+def main2():
     global total_src_seconds, global_executor
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         global_executor = executor
@@ -184,12 +200,15 @@ def main():
                 print('The queue is all processed. Stopping.')
                 bell()
                 break
-            total_src_seconds = int(sum(get_video_time(Path(fn)) for fn in files_to_process))
-            print(f'Total source duration: {dhms(total_src_seconds)}')
+            total_src_seconds = 0
             futures = []
             for video_src in files_to_process:
-                task = EncodingTask(video_src)
+                video_len = int(get_video_time(Path(video_src)))
+                total_src_seconds += video_len
+                task = EncodingTask(video_src, video_len)
                 tasks.append(task)
+            print(f'Total source duration: {dhms(total_src_seconds)}')
+            for task in tasks:
                 futures.append(executor.submit(worker, task))
             threading.Thread(target=progress_thread, args=[tasks], daemon=True).start()
             for future in as_completed(futures):
@@ -197,11 +216,11 @@ def main():
                 print(f'Task completed: {task.video_src}')
 
 
-if __name__ == '__main__':
+def main():
     try:
         with keep.running():
             t1 = datetime.datetime.now()
-            main()
+            main2()
             t2 = datetime.datetime.now()
             print(f'Total processing time: {t2 - t1}, now {datetime.datetime.now()}')
     except KeyboardInterrupt:
@@ -211,3 +230,7 @@ if __name__ == '__main__':
         traceback.print_exc()
         stop()
         print('Bye!')
+
+
+if __name__ == '__main__':
+    main()
