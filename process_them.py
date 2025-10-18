@@ -116,10 +116,10 @@ def process_video(task: EncodingTask):
                 is_working = False
                 return
             print(f'Video verified successfully: {video_src}')
-            print(f'move {out_tmp_file} => {out_moved_file})')
+            print(f'Move {out_tmp_file} => {out_moved_file})')
             shutil.move(out_tmp_file, out_moved_file)
             success.add(str(video_src))
-            print(f'move {video_src} => {src_moved_file}')
+            print(f'Move {video_src} => {src_moved_file}')
             shutil.move(video_src, src_moved_file)
         elif rc == 255:
             print('Ctrl+C detected on ffmpeg')
@@ -161,8 +161,9 @@ def progress_thread(tasks: list[EncodingTask]):
         percent2, eta2, speed2 = calc_progress(g_recent_task.seconds_processed, g_recent_task.video_len, t2 - g_recent_task.time_started) \
             if g_recent_task and not g_recent_task.finished \
             else (0, 0, 0)
+        took2 = (t2 - g_recent_task.time_started).total_seconds() if g_recent_task and not g_recent_task.finished else 0
         num_tasks_remaining = sum(1 for t in tasks if not t.finished)
-        msg = f'\rTotal: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | Last: ETA {hms(eta2)}'
+        msg = f'\rTotal: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | Last: {hms(took2)} → {hms(eta2)}, {speed2:.2f}x'
         sys.stdout.write(msg)
         time.sleep(1.0)
 
