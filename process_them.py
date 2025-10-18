@@ -38,7 +38,7 @@ errors = PersistentList('list-error.txt')
 is_working = True
 total_src_seconds = 0
 global_executor: typing.Optional[ThreadPoolExecutor] = None
-g_last_task: typing.Optional['EncodingTask'] = None
+g_recent_task: typing.Optional['EncodingTask'] = None
 
 if TARGET_EXT == 'mp4' and ENCODER == 'libx265':
     assert '-tag:v hvc1' in FFMPEG_PARAMS
@@ -96,23 +96,26 @@ def resolve_target_video_path(video_src: Path, target_dir: Path):
 
 
 def process_video(task: EncodingTask):
-    global is_working, g_last_task
+    global is_working, g_recent_task
     try:
-        g_last_task = task
+        g_recent_task = task
         task.time_started = datetime.datetime.now()
         video_src = task.video_src
         out_moved_file = resolve_target_video_path(video_src, OUT_DIR)
         src_moved_file = PROCESSED_INPUT_DIR / video_src.name
         create_dirs_for_file(out_moved_file)
         create_dirs_for_file(src_moved_file)
-        print(f'Processing video: {video_src}, duration: {hms(task.video_len)}')
+        print(f'Processing video: {video_src}, duration: {hms(task.video_len)}, started: {task.time_started}')
         out_tmp_file = resolve_target_video_path(video_src, TMP_OUT_DIR)
         create_dirs_for_file(out_tmp_file)
         rc = call_ffmpeg(video_src, out_tmp_file, task)
         if rc == 0:
+            print(f'Ffmpeg finished - verifying it: {video_src}')
             if not verify.verify_via_decoding_ffmpeg(out_tmp_file):
+                print(f'Video verification FAILED, gonna stop: {video_src}')
                 is_working = False
                 return
+            print(f'Video verified successfully: {video_src}')
             print(f'move {out_tmp_file} => {out_moved_file})')
             shutil.move(out_tmp_file, out_moved_file)
             success.add(str(video_src))
@@ -122,7 +125,7 @@ def process_video(task: EncodingTask):
             print('Ctrl+C detected on ffmpeg')
             is_working = False
         else:
-            print(f'ffmpeg finished with rc: {rc}')
+            print(f'Ffmpeg finished with rc: {rc}')
             errors.add(str(video_src))
             is_working = False
     finally:
@@ -154,13 +157,12 @@ def progress_thread(tasks: list[EncodingTask]):
     while is_working:
         t2 = datetime.datetime.now()
         total_processed = sum(t.seconds_processed for t in tasks)
-        delta = t2 - t1
-        percent1, eta1, speed1 = calc_progress(total_processed, total_src_seconds, delta)
-        percent2, eta2, speed2 = calc_progress(g_last_task.seconds_processed, g_last_task.video_len, delta) \
-            if g_last_task \
+        percent1, eta1, speed1 = calc_progress(total_processed, total_src_seconds, t2 - t1)
+        percent2, eta2, speed2 = calc_progress(g_recent_task.seconds_processed, g_recent_task.video_len, t2 - g_recent_task.time_started) \
+            if g_recent_task and not g_recent_task.finished \
             else (0, 0, 0)
         num_tasks_remaining = sum(1 for t in tasks if not t.finished)
-        msg = f'\rProgress: {percent1:.3f}%, ETA {hms(int(eta1))}, {speed1:.2f}x, {num_tasks_remaining} tasks. Last task ETA {hms(int(eta2))}'
+        msg = f'\rTotal: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | Last: ETA {hms(eta2)}'
         sys.stdout.write(msg)
         time.sleep(1.0)
 
