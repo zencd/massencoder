@@ -9,6 +9,7 @@ import threading
 import time
 import traceback
 import typing
+import shlex
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -72,7 +73,7 @@ def get_video_time(video: Path):
 def call_ffmpeg(video_in: Path, out_file: Path, task: EncodingTask):
     custom_params = re.split(r'\s+', FFMPEG_PARAMS)
     cmd = ['ffmpeg', '-hide_banner', '-i', str(video_in)] + custom_params + ['-y', str(out_file)]
-    print(f'Exec: {' '.join(cmd)}')
+    print(f'Exec: {shlex.join(cmd)}')
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8') as proc:
         line_cnt = 0
         for line in proc.stderr:
