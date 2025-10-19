@@ -110,12 +110,12 @@ def process_video(task: EncodingTask):
         create_dirs_for_file(out_tmp_file)
         rc = call_ffmpeg(video_src, out_tmp_file, task)
         if rc == 0:
-            print(f'Ffmpeg finished - verifying it: {video_src}')
+            print(f'Ffmpeg finished - verifying it: {out_tmp_file}')
             if not verify.verify_via_decoding_ffmpeg(out_tmp_file):
-                print(f'Video verification FAILED, gonna stop: {video_src}')
+                print(f'Video verification FAILED, gonna stop: {out_tmp_file}')
                 is_working = False
                 return
-            print(f'Video verified successfully: {video_src}')
+            print(f'Video verified successfully: {out_tmp_file}')
             print(f'Move {out_tmp_file} => {out_moved_file})')
             shutil.move(out_tmp_file, out_moved_file)
             success.add(str(video_src))
