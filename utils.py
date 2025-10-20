@@ -14,8 +14,14 @@ def beep():
     if platform.system() == 'Darwin':
         os.system('afplay /System/Library/Sounds/Ping.aiff')
     else:
-        sys.stdout.write('\a')
-        sys.stdout.flush()
+        try:
+            import winsound  # windows
+            winsound.Beep(1000, 300)
+        except ImportError:
+            # не работает когда питон гоняется в pycharm через раннер
+            # в макоси тоже не работает
+            sys.stdout.write('\a')
+            sys.stdout.flush()
 
 
 def read_list(fname):
