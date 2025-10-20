@@ -13,7 +13,8 @@ def bell():
         import winsound
         winsound.Beep(1000, 300)  # windows
     except:
-        os.system("beep -f 1000 -l 300") # nix
+        os.system("afplay /System/Library/Sounds/Ping.aiff")  # macos
+        # os.system("beep -f 1000 -l 300")  # linux?
         # sys.stdout.write('\a') # does not work at pycharm+windows
         # sys.stdout.flush()
 
@@ -41,7 +42,7 @@ def create_dirs_for_file(file: Path):
     file.parent.mkdir(parents=True, exist_ok=True)
 
 
-def hms(seconds: Union[int,float]) -> str:
+def hms(seconds: Union[int, float]) -> str:
     seconds = int(seconds)
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
@@ -49,7 +50,7 @@ def hms(seconds: Union[int,float]) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
-def dhms(seconds: Union[int,float]) -> str:
+def dhms(seconds: Union[int, float]) -> str:
     seconds = int(seconds)
     days, rem = divmod(seconds, 24 * 3600)
     return (f'{days}d ' if days else '') + hms(rem)
@@ -70,3 +71,7 @@ class PersistentList:
 
     def reload(self):
         self.lines = read_list(self.fname)
+
+
+if __name__ == '__main__':
+    bell()
