@@ -1,23 +1,21 @@
 import os
+import platform
 import re
+import sys
 from pathlib import Path
 from typing import Union
 
 
-def is_same_volume(one: Path, two: Path):
+def is_same_disk(one: Path, two: Path):
     return os.stat(str(one)).st_dev == os.stat(str(two)).st_dev
 
 
-def bell():
-    try:
-        import winsound
-        winsound.Beep(1000, 300)  # windows
-    except:
-        os.system("afplay /System/Library/Sounds/Ping.aiff")  # macos
-        # os.system("beep -f 1000 -l 300")  # linux?
-        # sys.stdout.write('\a') # does not work at pycharm+windows
-        # sys.stdout.flush()
-        # 4
+def beep():
+    if platform.system() == 'Darwin':
+        os.system('afplay /System/Library/Sounds/Ping.aiff')
+    else:
+        sys.stdout.write('\a')
+        sys.stdout.flush()
 
 
 def read_list(fname):
@@ -75,4 +73,4 @@ class PersistentList:
 
 
 if __name__ == '__main__':
-    bell()
+    beep()

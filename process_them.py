@@ -15,7 +15,7 @@ from pathlib import Path
 
 from wakepy.modes import keep
 
-from utils import create_dirs_for_file, PersistentList, hms, dhms, bell, is_same_volume
+from utils import create_dirs_for_file, PersistentList, hms, dhms, beep, is_same_disk
 
 MAX_WORKERS = 1
 try:
@@ -131,7 +131,7 @@ def process_video(task: EncodingTask):
             is_working = False
     finally:
         task.finished = True
-        bell()
+        beep()
 
 
 def worker(task: EncodingTask):
@@ -196,11 +196,11 @@ def main2():
                 if video_dst.exists():
                     raise FileExistsError(video_dst)
                 create_dirs_for_file(video_dst)
-                if not is_same_volume(video_src, video_dst.parent):
+                if not is_same_disk(video_src, video_dst.parent):
                     raise Exception(f'Files {video_src} and {video_dst} belongs to different volumes')
             if not files_to_process:
                 print('The queue is all processed. Stopping.')
-                bell()
+                beep()
                 break
             total_src_seconds = 0
             futures = []
