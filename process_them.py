@@ -17,7 +17,8 @@ from wakepy.modes import keep
 
 from utils import create_dirs_for_file, PersistentList, hms, dhms, beep, is_same_disk
 
-MAX_WORKERS = 1
+THREADS = 2
+MAX_WORKERS = 10
 try:
     import local
     BASE_DIR = local.BASE_DIR
@@ -27,7 +28,10 @@ OUT_DIR = BASE_DIR / 'reenc-done-output'
 PROCESSED_INPUT_DIR = BASE_DIR / 'reenc-done-input'
 TMP_OUT_DIR = BASE_DIR / 'reenc-work'
 ENCODER = 'libx265'
-VIDEO = f'-c:v {ENCODER} -x265-params open-gop=0 -crf 26 -preset medium -pix_fmt yuv420p'
+if THREADS > 0:
+    VIDEO = f'-threads {THREADS} -c:v {ENCODER} -x265-params open-gop=0:pools={THREADS} -crf 26 -preset medium -pix_fmt yuv420p'
+else:
+    VIDEO = f'-c:v {ENCODER} -x265-params open-gop=0 -crf 26 -preset medium -pix_fmt yuv420p'
 AUDIO = f'-c:a aac -b:a 128k -ac 2'
 FFMPEG_PARAMS = f'{VIDEO} {AUDIO} -avoid_negative_ts 1 -reset_timestamps 1'
 TARGET_EXT = 'mkv'
