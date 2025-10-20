@@ -17,7 +17,7 @@ def bell():
         # os.system("beep -f 1000 -l 300")  # linux?
         # sys.stdout.write('\a') # does not work at pycharm+windows
         # sys.stdout.flush()
-        # 3
+        # 4
 
 
 def read_list(fname):
