@@ -1,3 +1,4 @@
+import gui
 import verify
 import datetime
 import os.path
@@ -17,8 +18,8 @@ from wakepy.modes import keep
 
 from utils import create_dirs_for_file, PersistentList, hms, dhms, beep, is_same_disk
 
-THREADS = 2
-MAX_WORKERS = 10
+MAX_WORKERS = 3
+THREADS = 4
 try:
     import local
     BASE_DIR = local.BASE_DIR
@@ -44,6 +45,7 @@ is_working = True
 total_src_seconds = 0
 global_executor: typing.Optional[ThreadPoolExecutor] = None
 g_recent_task: typing.Optional['EncodingTask'] = None
+g_time_started = datetime.datetime.now()
 
 if TARGET_EXT == 'mp4' and ENCODER == 'libx265':
     assert '-tag:v hvc1' in FFMPEG_PARAMS
@@ -163,14 +165,23 @@ def progress_thread(tasks: list[EncodingTask]):
         t2 = datetime.datetime.now()
         total_processed = sum(t.seconds_processed for t in tasks)
         percent1, eta1, speed1 = calc_progress(total_processed, total_src_seconds, t2 - t1)
-        percent2, eta2, speed2 = calc_progress(g_recent_task.seconds_processed, g_recent_task.video_len, t2 - g_recent_task.time_started) \
+        percent2, eta2, speed2 = calc_progress(g_recent_task.seconds_processed, g_recent_task.video_len,
+                                               t2 - g_recent_task.time_started) \
             if g_recent_task and not g_recent_task.finished \
             else (0, 0, 0)
         took2 = (t2 - g_recent_task.time_started).total_seconds() if g_recent_task and not g_recent_task.finished else 0
         num_tasks_remaining = sum(1 for t in tasks if not t.finished)
-        msg = f'\rTotal: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | Last: {hms(took2)} → {hms(eta2)}, {speed2:.2f}x'
+        msg = f'\rTotal: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | Last: {hms(took2)} → {hms(eta2)}, {speed2:.2f}x | {MAX_WORKERS}x{THREADS}'
         sys.stdout.write(msg)
         time.sleep(1.0)
+
+
+def chart_thread(tasks: list[EncodingTask]):
+    def value_generator():
+        total_processed = sum(t.seconds_processed for t in tasks)
+        percent1, eta1, speed1 = calc_progress(total_processed, total_src_seconds, datetime.datetime.now() - g_time_started)
+        return speed1
+    gui.show_window(value_generator, 60*1000)
 
 
 def stop():
@@ -182,7 +193,7 @@ def stop():
 
 
 def main2():
-    global total_src_seconds, global_executor
+    global total_src_seconds, global_executor, g_time_started
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         global_executor = executor
         while True:
@@ -214,12 +225,17 @@ def main2():
                 task = EncodingTask(video_src, video_len)
                 tasks.append(task)
             print(f'Total source duration: {dhms(total_src_seconds)}')
+            g_time_started = datetime.datetime.now()
             for task in tasks:
                 futures.append(executor.submit(worker, task))
             threading.Thread(target=progress_thread, args=[tasks], daemon=True).start()
+            # threading.Thread(target=chart_thread, args=[tasks], daemon=False).start()
+            # chart_thread(tasks)
+            print(f'Waiting for the futures')
             for future in as_completed(futures):
                 task = future.result()
                 print(f'Task completed: {task.video_src}')
+            print(f'All futures completed')
 
 
 def main():
@@ -231,10 +247,12 @@ def main():
             print(f'Total processing time: {t2 - t1}, now {datetime.datetime.now()}')
     except KeyboardInterrupt:
         stop()
+        print(datetime.datetime.now())
         print('Bye!')
     except Exception:
         traceback.print_exc()
         stop()
+        print(datetime.datetime.now())
         print('Bye!')
 
 

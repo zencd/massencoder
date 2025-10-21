@@ -5,11 +5,14 @@ import subprocess
 import sys
 import time
 import datetime
+import gui
 
-INP = 'D:/vikorzu-d/reenc-done-input/Играем в Игру Года, затем смотрим кино, затем TGA24  [5845b58e-8b06-4be6-a529-4cce906a5cae].mp4'
-LENGTH = 17*60 + 42
+# INP = 'D:/vikorzu-d/reenc-done-input/Играем в Игру Года, затем смотрим кино, затем TGA24  [5845b58e-8b06-4be6-a529-4cce906a5cae].mp4'
+# LENGTH = 17*60 + 42
+INP = 'gen30s.mp4'
+LENGTH = 30 * 60
 THREADS = 2
-WORKERS = 10
+WORKERS = 2
 
 
 def call_ffmpeg(video_in: str, out, progress_callback):
@@ -41,16 +44,38 @@ def worker(id_, info: dict):
 
 def main():
     info = dict()
+    threads = []
     for i in range(WORKERS):
-        threading.Thread(target=worker, args=[i, info], daemon=False).start()
+        t = threading.Thread(target=worker, args=[i, info], daemon=False)
+        t.start()
+        threads.append(t)
     t1 = datetime.datetime.now()
-    while True:
+
+    def value_generator():
         t2 = datetime.datetime.now()
-        if (t2-t1).total_seconds() > 0:
+        if (t2 - t1).total_seconds() > 0:
             total_processed = sum(n for n in info.values())
-            speed = total_processed / (t2-t1).total_seconds()
-            sys.stdout.write(f'\rSpeed: {speed:.3f}x, total_processed: {total_processed}')
-        time.sleep(0.5)
+            speed = total_processed / (t2 - t1).total_seconds()
+            sys.stdout.write(f'\rSpeed: {speed:.3f}x, total_processed: {total_processed}, passed {t2 - t1}')
+            return speed
+        return 0
+
+    ani, plt = gui.show_window(value_generator)
+    for t in threads:
+        print('joining')
+        t.join()
+        print('joined')
+    ani.save('cpu-load.img')
+    plt.close()
+    sys.exit(0)
+
+    # while True:
+    #     t2 = datetime.datetime.now()
+    #     if (t2-t1).total_seconds() > 0:
+    #         total_processed = sum(n for n in info.values())
+    #         speed = total_processed / (t2-t1).total_seconds()
+    #         sys.stdout.write(f'\rSpeed: {speed:.3f}x, total_processed: {total_processed}')
+    #     time.sleep(0.5)
 
 
 if __name__ == '__main__':
