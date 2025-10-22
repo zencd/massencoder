@@ -123,10 +123,12 @@ def process_video(task: EncodingTask):
                 is_working = False
                 return
             print(f'Video verified successfully: {out_tmp_file}')
+            create_dirs_for_file(out_moved_file)
             print(f'Move {out_tmp_file} => {out_moved_file})')
             shutil.move(out_tmp_file, out_moved_file)
             success.add(str(video_src))
             print(f'Move {video_src} => {src_moved_file}')
+            create_dirs_for_file(src_moved_file)
             shutil.move(video_src, src_moved_file)
         elif rc == 255:
             print('Ctrl+C detected on ffmpeg')
