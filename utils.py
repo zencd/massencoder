@@ -2,6 +2,7 @@ import os
 import platform
 import re
 import sys
+import datetime
 from pathlib import Path
 from typing import Union
 
@@ -59,6 +60,18 @@ def dhms(seconds: Union[int, float]) -> str:
     seconds = int(seconds)
     days, rem = divmod(seconds, 24 * 3600)
     return (f'{days}d ' if days else '') + hms(rem)
+
+
+def calc_progress(amount_processed: int, total_amount: int, elapsed: datetime.timedelta):
+    if total_amount:
+        percent = amount_processed / total_amount * 100.0
+        elapsed = elapsed.total_seconds()
+        if percent > 0 and elapsed > 0:
+            expected_total_time = elapsed * 100 / percent
+            eta = expected_total_time - elapsed
+            speed = amount_processed / elapsed
+            return percent, eta, speed
+    return 0, 0, 0
 
 
 class PersistentList:

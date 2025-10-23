@@ -1,8 +1,7 @@
-import gui
-import verify
 import datetime
 import os.path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -10,53 +9,15 @@ import threading
 import time
 import traceback
 import typing
-import shlex
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from wakepy.modes import keep
 
-from utils import create_dirs_for_file, PersistentList, hms, dhms, beep, is_same_disk
-
-MAX_WORKERS = 3
-THREADS = 4
-try:
-    import local
-    BASE_DIR = local.BASE_DIR
-except ImportError:
-    BASE_DIR = Path.home() / 'Downloads'
-OUT_DIR = BASE_DIR / 'reenc-done-output'
-PROCESSED_INPUT_DIR = BASE_DIR / 'reenc-done-input'
-TMP_OUT_DIR = BASE_DIR / 'reenc-work'
-ENCODER = 'libx265'
-if THREADS > 0:
-    VIDEO = f'-threads {THREADS} -c:v {ENCODER} -x265-params open-gop=0:pools={THREADS} -crf 26 -preset medium -pix_fmt yuv420p'
-else:
-    VIDEO = f'-c:v {ENCODER} -x265-params open-gop=0 -crf 26 -preset medium -pix_fmt yuv420p'
-AUDIO = f'-c:a aac -b:a 128k -ac 2'
-FFMPEG_PARAMS = f'{VIDEO} {AUDIO} -avoid_negative_ts 1 -reset_timestamps 1'
-TARGET_EXT = 'mkv'
-
-que = PersistentList('list-que.txt')
-success = PersistentList('list-success.txt')
-errors = PersistentList('list-error.txt')
-
-is_working = True
-total_src_seconds = 0
-global_executor: typing.Optional[ThreadPoolExecutor] = None
-g_recent_task: typing.Optional['EncodingTask'] = None
-g_time_started = datetime.datetime.now()
-
-if TARGET_EXT == 'mp4' and ENCODER == 'libx265':
-    assert '-tag:v hvc1' in FFMPEG_PARAMS
-else:
-    assert '-tag:v hvc1' not in FFMPEG_PARAMS
-
-if TARGET_EXT == 'mp4':
-    assert '-movflags +faststart' in FFMPEG_PARAMS
-if TARGET_EXT == 'mkv':
-    assert '-tag:v hvc1' not in FFMPEG_PARAMS
-    assert '-movflags +faststart' not in FFMPEG_PARAMS
+import gui
+import verify
+from helper import get_video_time, get_video_meta
+from utils import create_dirs_for_file, hms, dhms, beep, is_same_disk, PersistentList, calc_progress
 
 
 class EncodingTask:
@@ -67,196 +28,199 @@ class EncodingTask:
         self.finished = False
         self.time_started = datetime.datetime.now()
 
-
-def get_video_time(video: Path):
-    base = 'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1'.split(' ')
-    cmd = base + [str(video)]
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
-    assert result.returncode == 0
-    return float(result.stdout.strip())
+    def __str__(self):
+        return f'EncodingTask({self.video_src}, finished={self.finished})'
 
 
-def call_ffmpeg(video_in: Path, out_file: Path, task: EncodingTask):
-    custom_params = re.split(r'\s+', FFMPEG_PARAMS)
-    cmd = ['ffmpeg', '-hide_banner', '-i', str(video_in)] + custom_params + ['-y', str(out_file)]
-    print(f'Exec: {shlex.join(cmd)}')
-    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8') as proc:
-        line_cnt = 0
-        for line in proc.stderr:
-            if not is_working:
-                print('call_ffmpeg: terminating ffmpeg')
-                proc.terminate()
-                proc.wait()
-                return 255
-            if line_cnt % 5 == 0:
-                line = line.strip()
-                if m := re.search(r'\stime=(\d+):(\d+):(\d+).\d+', line):
-                    time_processed = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
-                    task.seconds_processed = time_processed
-            line_cnt += 1
-        proc.wait()
-    return proc.returncode
+class Processor:
 
+    def __init__(self):
+        import defs
+        super().__init__()
+        self.is_working = False
+        self.time_started = datetime.datetime.now()
+        self.recent_task: typing.Optional['EncodingTask'] = None
+        self.executor: typing.Optional[ThreadPoolExecutor] = None
+        self.total_src_seconds = 0
+        self.defs = defs
+        self.que = PersistentList('list-que.txt')
+        self.success = PersistentList('list-success.txt')
+        self.errors = PersistentList('list-error.txt')
 
-def resolve_target_video_path(video_src: Path, target_dir: Path):
-    return (target_dir / video_src.name).with_suffix(f'.{TARGET_EXT}')
+    def call_ffmpeg(self, video_in: Path, out_file: Path, task: EncodingTask):
+        defs = self.defs
+        ff_params = getattr(defs, defs.PARAM_MAKER)()
+        custom_params = re.split(r'\s+', ff_params)
+        cmd = ['ffmpeg', '-hide_banner', '-i', str(video_in)] + custom_params + ['-y', str(out_file)]
+        print(f'Exec: {shlex.join(cmd)}')
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8') as proc:
+            line_cnt = 0
+            for line in proc.stderr:
+                if not self.is_working:
+                    print('call_ffmpeg: terminating ffmpeg')
+                    proc.terminate()
+                    proc.wait(defs.WAIT_TIMEOUT)
+                    return 255
+                if line_cnt % 5 == 0:
+                    line = line.strip()
+                    if m := re.search(r'\stime=(\d+):(\d+):(\d+).\d+', line):
+                        time_processed = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
+                        task.seconds_processed = time_processed
+                line_cnt += 1
+            proc.wait()
+        return proc.returncode
 
+    def resolve_target_video_path(self, video_src: Path, target_dir: Path):
+        defs = self.defs
+        return (target_dir / video_src.name).with_suffix(f'.{defs.TARGET_EXT}')
 
-def process_video(task: EncodingTask):
-    global is_working, g_recent_task
-    try:
-        g_recent_task = task
+    def process_video(self, task: EncodingTask):
+        print(f'process_video: {task}')
+        defs = self.defs
+        self.recent_task = task
         task.time_started = datetime.datetime.now()
         video_src = task.video_src
-        out_moved_file = resolve_target_video_path(video_src, OUT_DIR)
-        src_moved_file = PROCESSED_INPUT_DIR / video_src.name
+        out_moved_file = self.resolve_target_video_path(video_src, defs.OUT_DIR)
+        src_moved_file = defs.PROCESSED_INPUT_DIR / video_src.name
         create_dirs_for_file(out_moved_file)
         create_dirs_for_file(src_moved_file)
         print(f'Processing video: {video_src}, duration: {hms(task.video_len)}, started: {task.time_started}')
-        out_tmp_file = resolve_target_video_path(video_src, TMP_OUT_DIR)
+        out_tmp_file = self.resolve_target_video_path(video_src, defs.TMP_OUT_DIR)
         create_dirs_for_file(out_tmp_file)
-        rc = call_ffmpeg(video_src, out_tmp_file, task)
+        rc = self.call_ffmpeg(video_src, out_tmp_file, task)
         if rc == 0:
             print(f'Ffmpeg finished - verifying it: {out_tmp_file}')
             if not verify.verify_via_decoding_ffmpeg(out_tmp_file):
                 print(f'Video verification FAILED, gonna stop: {out_tmp_file}')
-                is_working = False
+                self.is_working = False
                 return
             print(f'Video verified successfully: {out_tmp_file}')
             create_dirs_for_file(out_moved_file)
             print(f'Move {out_tmp_file} => {out_moved_file})')
             shutil.move(out_tmp_file, out_moved_file)
-            success.add(str(video_src))
-            print(f'Move {video_src} => {src_moved_file}')
-            create_dirs_for_file(src_moved_file)
-            shutil.move(video_src, src_moved_file)
+            self.success.add(str(video_src))
+            if defs.MOVE_INPUT_FILE:
+                print(f'Move {video_src} => {src_moved_file}')
+                create_dirs_for_file(src_moved_file)
+                shutil.move(video_src, src_moved_file)
         elif rc == 255:
             print('Ctrl+C detected on ffmpeg')
-            is_working = False
+            self.is_working = False
         else:
             print(f'Ffmpeg finished with rc: {rc}')
-            errors.add(str(video_src))
-            is_working = False
+            self.errors.add(str(video_src))
+            self.is_working = False
+
+    def mark_as_stopping(self):
+        self.is_working = False
+
+    def start_impl(self):
+        defs = self.defs
+        with ThreadPoolExecutor(max_workers=defs.MAX_WORKERS) as executor:
+            self.executor = executor
+            while True:
+                self.is_working = True
+                tasks = []
+                self.que.reload()
+                file_is_ok_to_process = lambda fn: (fn not in self.success.lines) and \
+                                                   (fn not in self.errors.lines) and \
+                                                   os.path.exists(fn) and \
+                                                   os.path.isfile(fn)
+                files_to_process = [fn for fn in self.que.lines if file_is_ok_to_process(fn)]
+                files_to_process = list(dict.fromkeys(files_to_process))  # del duplicates
+                for f in files_to_process:
+                    video_src = Path(f)
+                    videos, audios = get_video_meta(video_src)
+                    assert len(videos) == 1, f'Abnormal number of video streams: {len(videos)} in {video_src}'
+                    assert videos[0]['codec_name'] != 'hevc', f'Video is H265 already: {video_src}'
+                    video_dst = self.resolve_target_video_path(video_src, defs.OUT_DIR)
+                    if video_dst.exists():
+                        raise FileExistsError(video_dst)
+                    create_dirs_for_file(video_dst)
+                    # if not is_same_disk(video_src, video_dst.parent):
+                    #     raise Exception(f'Files {video_src} and {video_dst} belongs to different volumes')
+                if not files_to_process:
+                    print('The queue is all processed. Stopping.')
+                    beep()
+                    break
+                self.total_src_seconds = 0
+                futures = []
+                for video_src in files_to_process:
+                    video_len = int(get_video_time(Path(video_src)))
+                    self.total_src_seconds += video_len
+                    task = EncodingTask(video_src, video_len)
+                    tasks.append(task)
+                print(f'Total source duration: {dhms(self.total_src_seconds)}')
+                self.time_started = datetime.datetime.now()
+                for task in tasks:
+                    futures.append(executor.submit(encoder_thread, self, task))
+                threading.Thread(target=progress_thread, args=[self, tasks], daemon=True).start()
+                # threading.Thread(target=chart_thread, args=[tasks], daemon=False).start()
+                # chart_thread(tasks)
+                print(f'Waiting for the futures')
+                for future in as_completed(futures):
+                    task = future.result()
+                    print(f'Task completed: {task}')
+                print(f'All futures completed')
+                self.is_working = False
+                break
+        self.executor = None
+
+    def start(self):
+        try:
+            with keep.running():
+                t1 = datetime.datetime.now()
+                self.start_impl()
+                t2 = datetime.datetime.now()
+                print(f'Total processing time: {t2 - t1}, now {datetime.datetime.now()}')
+        except KeyboardInterrupt:
+            self.mark_as_stopping()
+            print(datetime.datetime.now())
+            print('Bye!')
+        except Exception:
+            traceback.print_exc()
+            self.mark_as_stopping()
+            print(datetime.datetime.now())
+            print('Bye!')
+
+
+def encoder_thread(p: Processor, task: EncodingTask):
+    try:
+        if p.is_working and not task.finished:
+            p.process_video(task)
+        return task
     finally:
         task.finished = True
         beep()
 
 
-def worker(task: EncodingTask):
-    if is_working and not task.finished:
-        process_video(task)
-    return task
-
-
-def calc_progress(seconds_processed: int, total_seconds: int, delta: datetime.timedelta):
-    if total_seconds:
-        percent = seconds_processed / total_seconds * 100.0
-        elapsed = delta.total_seconds()
-        if percent > 0 and elapsed > 0:
-            expected_total_time = elapsed * 100 / percent
-            eta = expected_total_time - elapsed
-            speed = seconds_processed / elapsed
-            return percent, eta, speed
-    return 0, 0, 0
-
-
-def progress_thread(tasks: list[EncodingTask]):
-    global total_src_seconds
+def progress_thread(p: Processor, tasks: list[EncodingTask]):
+    defs = p.defs
     t1 = datetime.datetime.now()
-    while is_working:
+    while p.is_working:
         t2 = datetime.datetime.now()
         total_processed = sum(t.seconds_processed for t in tasks)
-        percent1, eta1, speed1 = calc_progress(total_processed, total_src_seconds, t2 - t1)
-        percent2, eta2, speed2 = calc_progress(g_recent_task.seconds_processed, g_recent_task.video_len,
-                                               t2 - g_recent_task.time_started) \
-            if g_recent_task and not g_recent_task.finished \
+        percent1, eta1, speed1 = calc_progress(total_processed, p.total_src_seconds, t2 - t1)
+        percent2, eta2, speed2 = calc_progress(p.recent_task.seconds_processed, p.recent_task.video_len,
+                                               t2 - p.recent_task.time_started) \
+            if p.recent_task and not p.recent_task.finished \
             else (0, 0, 0)
-        took2 = (t2 - g_recent_task.time_started).total_seconds() if g_recent_task and not g_recent_task.finished else 0
+        took2 = (t2 - p.recent_task.time_started).total_seconds() if p.recent_task and not p.recent_task.finished else 0
         num_tasks_remaining = sum(1 for t in tasks if not t.finished)
-        msg = f'\rTotal: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | Last: {hms(took2)} → {hms(eta2)}, {speed2:.2f}x | {MAX_WORKERS}x{THREADS}'
+        msg = f'\rTotal: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | Last: {hms(took2)} → {hms(eta2)}, {speed2:.2f}x | {defs.MAX_WORKERS}x{defs.THREADS}'
         sys.stdout.write(msg)
         time.sleep(1.0)
 
 
-def chart_thread(tasks: list[EncodingTask]):
+def chart_thread(p: Processor, tasks: list[EncodingTask]):
     def value_generator():
         total_processed = sum(t.seconds_processed for t in tasks)
-        percent1, eta1, speed1 = calc_progress(total_processed, total_src_seconds, datetime.datetime.now() - g_time_started)
+        percent1, eta1, speed1 = calc_progress(total_processed, p.total_src_seconds,
+                                               datetime.datetime.now() - p.time_started)
         return speed1
-    gui.show_window(value_generator, 60*1000)
 
-
-def stop():
-    global is_working, global_executor
-    is_working = False
-    if global_executor:
-        print('ThreadPoolExecutor.shutdown')
-        global_executor.shutdown()
-
-
-def main2():
-    global total_src_seconds, global_executor, g_time_started
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        global_executor = executor
-        while True:
-            tasks = []
-            que.reload()
-            file_is_ok_to_process = lambda fn: (fn not in success.lines) and \
-                                               (fn not in errors.lines) and \
-                                               os.path.exists(fn) and \
-                                               os.path.isfile(fn)
-            files_to_process = [fn for fn in que.lines if file_is_ok_to_process(fn)]
-            files_to_process = list(dict.fromkeys(files_to_process))  # del duplicates
-            for f in files_to_process:
-                video_src = Path(f)
-                video_dst = resolve_target_video_path(video_src, OUT_DIR)
-                if video_dst.exists():
-                    raise FileExistsError(video_dst)
-                create_dirs_for_file(video_dst)
-                if not is_same_disk(video_src, video_dst.parent):
-                    raise Exception(f'Files {video_src} and {video_dst} belongs to different volumes')
-            if not files_to_process:
-                print('The queue is all processed. Stopping.')
-                beep()
-                break
-            total_src_seconds = 0
-            futures = []
-            for video_src in files_to_process:
-                video_len = int(get_video_time(Path(video_src)))
-                total_src_seconds += video_len
-                task = EncodingTask(video_src, video_len)
-                tasks.append(task)
-            print(f'Total source duration: {dhms(total_src_seconds)}')
-            g_time_started = datetime.datetime.now()
-            for task in tasks:
-                futures.append(executor.submit(worker, task))
-            threading.Thread(target=progress_thread, args=[tasks], daemon=True).start()
-            # threading.Thread(target=chart_thread, args=[tasks], daemon=False).start()
-            # chart_thread(tasks)
-            print(f'Waiting for the futures')
-            for future in as_completed(futures):
-                task = future.result()
-                print(f'Task completed: {task.video_src}')
-            print(f'All futures completed')
-
-
-def main():
-    try:
-        with keep.running():
-            t1 = datetime.datetime.now()
-            main2()
-            t2 = datetime.datetime.now()
-            print(f'Total processing time: {t2 - t1}, now {datetime.datetime.now()}')
-    except KeyboardInterrupt:
-        stop()
-        print(datetime.datetime.now())
-        print('Bye!')
-    except Exception:
-        traceback.print_exc()
-        stop()
-        print(datetime.datetime.now())
-        print('Bye!')
+    gui.show_window(value_generator, 60 * 1000)
 
 
 if __name__ == '__main__':
-    main()
+    Processor().start()
