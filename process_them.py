@@ -53,7 +53,7 @@ class Processor:
         custom_params = re.split(r'\s+', ff_params)
         cmd = ['ffmpeg', '-hide_banner', '-i', str(video_in)] + custom_params + ['-y', str(out_file)]
         print(f'Exec: {shlex.join(cmd)}')
-        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8') as proc:
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace') as proc:
             line_cnt = 0
             for line in proc.stderr:
                 if not self.is_working:
@@ -67,7 +67,7 @@ class Processor:
                         time_processed = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
                         task.seconds_processed = time_processed
                 line_cnt += 1
-            proc.wait()
+            proc.wait(defs.WAIT_TIMEOUT)
         return proc.returncode
 
     def resolve_target_video_path(self, video_src: Path, target_dir: Path):
@@ -115,6 +115,24 @@ class Processor:
         self.is_working = False
 
     def start_impl(self):
+        def filter_videos(f):
+            video_src = Path(f)
+            videos, audios = get_video_meta(video_src)
+            if len(videos) != 1:
+                print(f'Abnormal number of video streams: {len(videos)} in {video_src}')
+                return False
+            if videos[0]['codec_name'] == 'hevc':
+                print(f'Video is H265 already: {video_src}')
+                return False
+            video_dst = self.resolve_target_video_path(video_src, defs.OUT_DIR)
+            if video_dst.exists():
+                print(f'Destination file already exists: {video_dst}')
+                return False
+            create_dirs_for_file(video_dst)
+            # if not is_same_disk(video_src, video_dst.parent):
+            #     raise Exception(f'Files {video_src} and {video_dst} belongs to different volumes')
+            return True
+
         defs = self.defs
         with ThreadPoolExecutor(max_workers=defs.MAX_WORKERS) as executor:
             self.executor = executor
@@ -128,17 +146,7 @@ class Processor:
                                                    os.path.isfile(fn)
                 files_to_process = [fn for fn in self.que.lines if file_is_ok_to_process(fn)]
                 files_to_process = list(dict.fromkeys(files_to_process))  # del duplicates
-                for f in files_to_process:
-                    video_src = Path(f)
-                    videos, audios = get_video_meta(video_src)
-                    assert len(videos) == 1, f'Abnormal number of video streams: {len(videos)} in {video_src}'
-                    assert videos[0]['codec_name'] != 'hevc', f'Video is H265 already: {video_src}'
-                    video_dst = self.resolve_target_video_path(video_src, defs.OUT_DIR)
-                    if video_dst.exists():
-                        raise FileExistsError(video_dst)
-                    create_dirs_for_file(video_dst)
-                    # if not is_same_disk(video_src, video_dst.parent):
-                    #     raise Exception(f'Files {video_src} and {video_dst} belongs to different volumes')
+                files_to_process = list(filter(filter_videos, files_to_process))
                 if not files_to_process:
                     print('The queue is all processed. Stopping.')
                     beep()
