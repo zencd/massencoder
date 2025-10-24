@@ -1,4 +1,11 @@
+import datetime
+import threading
+import time
+from typing import Type
+
+from textual._path import CSSPathType
 from textual.app import App, ComposeResult
+from textual.driver import Driver
 from textual.widgets import Button, Footer, ListView, ListItem, Label
 from textual.containers import Vertical, Horizontal
 from textual import events
@@ -23,11 +30,18 @@ class MyApp(App):
     }
     """
 
+    def __init__(self):
+        super().__init__()
+        self.list_view: ListView = None
+
     def compose(self) -> ComposeResult:
         list_view = ListView(
-            *[ListItem(Label(f"Элемент {i+1}")) for i in range(10)],
+            # *[ListItem(Label(f"Элемент {i+1}")) for i in range(10)],
             id="main"
         )
+        self.list_view = list_view
+
+        # list_view.append(ListItem(Label('xxx')))
 
         buttons = Horizontal(
             Button("Добавить", id="add"),
@@ -49,6 +63,7 @@ class MyApp(App):
 
         if button_id == "add":
             status.update("Нажата кнопка: Добавить")
+            await self.list_view.append(ListItem(Label('xxx')))
         elif button_id == "del":
             status.update("Нажата кнопка: Удалить")
         elif button_id == "refresh":
@@ -57,5 +72,12 @@ class MyApp(App):
             status.update("Неизвестная кнопка")
 
 
+def thrd():
+    time.sleep(3)
+    app.list_view.append(ListItem(Label('zzz')))
+
+
 if __name__ == "__main__":
-    MyApp().run()
+    threading.Thread(target=thrd, args=[], daemon=True).start()
+    app = MyApp()
+    app.run()

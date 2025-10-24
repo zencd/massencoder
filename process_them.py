@@ -12,12 +12,21 @@ import typing
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+import rich
 from wakepy.modes import keep
 
 import gui
 import verify
 from helper import get_video_time, get_video_meta
+from ui_terminal import UiTerminal
 from utils import create_dirs_for_file, hms, dhms, beep, is_same_disk, PersistentList, calc_progress
+
+STATUS_AWAITING = 'Awaiting'
+STATUS_RUNNING = 'Running'
+STATUS_FINISHED = 'Finished'
+
+RESOLUTION_SUCCESS = 'Success'
+RESOLUTION_ERROR = 'Error'
 
 
 class EncodingTask:
@@ -26,10 +35,22 @@ class EncodingTask:
         self.video_len = video_len
         self.seconds_processed = 0
         self.finished = False
+        self.status = STATUS_AWAITING
         self.time_started = datetime.datetime.now()
+        self.resolution = ''
 
     def __str__(self):
         return f'EncodingTask({self.video_src}, finished={self.finished})'
+
+    def set_error(self):
+        self.finished = True
+        self.status = STATUS_FINISHED
+        self.resolution = RESOLUTION_ERROR
+
+    def set_success(self):
+        self.finished = True
+        self.status = STATUS_FINISHED
+        self.resolution = RESOLUTION_SUCCESS
 
 
 class Processor:
@@ -46,6 +67,9 @@ class Processor:
         self.que = PersistentList('list-que.txt')
         self.success = PersistentList('list-success.txt')
         self.errors = PersistentList('list-error.txt')
+        self.tasks = []
+        # self.ui = UiTerminal()
+        self.console = rich.console.Console()
 
     def call_ffmpeg(self, video_in: Path, out_file: Path, task: EncodingTask):
         defs = self.defs
@@ -75,6 +99,7 @@ class Processor:
         return (target_dir / video_src.name).with_suffix(f'.{defs.TARGET_EXT}')
 
     def process_video(self, task: EncodingTask):
+        task.status = STATUS_RUNNING
         print(f'process_video: {task}')
         defs = self.defs
         self.recent_task = task
@@ -93,6 +118,7 @@ class Processor:
             if not verify.verify_via_decoding_ffmpeg(out_tmp_file):
                 print(f'Video verification FAILED, gonna stop: {out_tmp_file}')
                 self.is_working = False
+                task.set_error()
                 return
             print(f'Video verified successfully: {out_tmp_file}')
             create_dirs_for_file(out_moved_file)
@@ -106,10 +132,12 @@ class Processor:
         elif rc == 255:
             print('Ctrl+C detected on ffmpeg')
             self.is_working = False
+            task.set_error()
         else:
             print(f'Ffmpeg finished with rc: {rc}')
             self.errors.add(str(video_src))
             self.is_working = False
+            task.set_success()
 
     def mark_as_stopping(self):
         self.is_working = False
@@ -152,7 +180,10 @@ class Processor:
                     tasks.append(task)
                 print(f'Total source duration: {dhms(self.total_src_seconds)}')
                 self.time_started = datetime.datetime.now()
+                # self.ui.start()
                 for task in tasks:
+                    self.tasks.append(task)
+                    # self.ui.add_task(task)
                     futures.append(executor.submit(encoder_thread, self, task))
                 threading.Thread(target=progress_thread, args=[self, tasks], daemon=True).start()
                 # threading.Thread(target=chart_thread, args=[tasks], daemon=False).start()
@@ -191,6 +222,7 @@ def encoder_thread(p: Processor, task: EncodingTask):
         return task
     finally:
         task.finished = True
+        task.status = STATUS_FINISHED
         beep()
 
 
@@ -207,8 +239,29 @@ def progress_thread(p: Processor, tasks: list[EncodingTask]):
             else (0, 0, 0)
         took2 = (t2 - p.recent_task.time_started).total_seconds() if p.recent_task and not p.recent_task.finished else 0
         num_tasks_remaining = sum(1 for t in tasks if not t.finished)
-        msg = f'\rTotal: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | Last: {hms(took2)} → {hms(eta2)}, {speed2:.2f}x | {defs.MAX_WORKERS}x{defs.THREADS}'
-        sys.stdout.write(msg)
+
+        # msg = f'\rTotal: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | Last: {hms(took2)} → {hms(eta2)}, {speed2:.2f}x | {defs.MAX_WORKERS}x{defs.THREADS}'
+        # sys.stdout.write(msg)
+
+        p.console.clear()
+        for task in tasks:
+            if task.resolution == RESOLUTION_SUCCESS:
+                status = 'OK'
+            elif task.resolution == RESOLUTION_ERROR:
+                status = 'ERROR'
+            else:
+                status = task.status
+            percent2, eta2, speed2 = calc_progress(task.seconds_processed, task.video_len, t2 - task.time_started) \
+                if not task.finished \
+                else (0, 0, 0)
+            took2 = (t2 - task.time_started).total_seconds() \
+                if not task.finished \
+                else 0
+
+            p.console.print(f'{status:10s} {task.video_src} | {hms(took2)} → {hms(eta2)}, {speed2:.2f}x')
+        p.console.print(
+            f'Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | {defs.MAX_WORKERS}x{defs.THREADS}')
+
         time.sleep(1.0)
 
 
