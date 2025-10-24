@@ -115,18 +115,18 @@ class Processor:
         self.is_working = False
 
     def start_impl(self):
-        def filter_videos(f):
+        def filter_videos(f: str):
             video_src = Path(f)
             videos, audios = get_video_meta(video_src)
             if len(videos) != 1:
-                print(f'Abnormal number of video streams: {len(videos)} in {video_src}')
+                print(f'ERROR: Abnormal number of video streams: {len(videos)} in {video_src}')
                 return False
             if videos[0]['codec_name'] == 'hevc':
-                print(f'Video is H265 already: {video_src}')
+                print(f'ERROR: Video is H265 already: {video_src}')
                 return False
             video_dst = self.resolve_target_video_path(video_src, defs.OUT_DIR)
             if video_dst.exists():
-                print(f'Destination file already exists: {video_dst}')
+                print(f'ERROR: Destination file already exists: {video_dst}')
                 return False
             create_dirs_for_file(video_dst)
             # if not is_same_disk(video_src, video_dst.parent):
