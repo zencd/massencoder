@@ -1,2 +1,4 @@
 textual
 wakepy
+textual
+rich
