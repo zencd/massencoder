@@ -91,8 +91,8 @@ class Processor:
         if rc == 0:
             print(f'Ffmpeg finished - verifying it: {out_tmp_file}')
             if not verify.verify_via_decoding_ffmpeg(out_tmp_file):
-                print(f'Video verification FAILED, gonna stop: {out_tmp_file}')
-                self.is_working = False
+                print(f'ERROR: Video verification failed, gonna continue: {out_tmp_file}')
+                self.errors.add(str(video_src))
                 return
             print(f'Video verified successfully: {out_tmp_file}')
             create_dirs_for_file(out_moved_file)
@@ -105,11 +105,11 @@ class Processor:
                 shutil.move(video_src, src_moved_file)
         elif rc == 255:
             print('Ctrl+C detected on ffmpeg')
-            self.is_working = False
+            self.mark_as_stopping()
         else:
             print(f'Ffmpeg finished with rc: {rc}')
             self.errors.add(str(video_src))
-            self.is_working = False
+            self.mark_as_stopping()
 
     def mark_as_stopping(self):
         self.is_working = False
@@ -156,13 +156,13 @@ class Processor:
                 for video_src in files_to_process:
                     video_len = int(get_video_time(Path(video_src)))
                     self.total_src_seconds += video_len
-                    task = EncodingTask(video_src, video_len)
-                    tasks.append(task)
+                    tasks.append(EncodingTask(video_src, video_len))
                 print(f'Total source duration: {dhms(self.total_src_seconds)}')
                 self.time_started = datetime.datetime.now()
                 for task in tasks:
                     futures.append(executor.submit(encoder_thread, self, task))
-                threading.Thread(target=progress_thread, args=[self, tasks], daemon=True).start()
+                pt = threading.Thread(target=progress_thread, args=[self, tasks], daemon=True)
+                pt.start()
                 # threading.Thread(target=chart_thread, args=[tasks], daemon=False).start()
                 # chart_thread(tasks)
                 print(f'Waiting for the futures')
@@ -170,7 +170,10 @@ class Processor:
                     task = future.result()
                     print(f'Task completed: {task}')
                 print(f'All futures completed')
-                self.is_working = False
+                self.mark_as_stopping()
+                print('Joining the progress thread')
+                pt.join()
+                print('Joined the progress thread')
                 break
         self.executor = None
 
