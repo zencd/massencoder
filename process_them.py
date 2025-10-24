@@ -77,7 +77,8 @@ class Processor:
         custom_params = re.split(r'\s+', ff_params)
         cmd = ['ffmpeg', '-hide_banner', '-i', str(video_in)] + custom_params + ['-y', str(out_file)]
         print(f'Exec: {shlex.join(cmd)}')
-        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace') as proc:
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8',
+                              errors='replace') as proc:
             line_cnt = 0
             for line in proc.stderr:
                 if not self.is_working:
@@ -244,11 +245,6 @@ def progress_thread(p: Processor, tasks: list[EncodingTask]):
         t2 = datetime.datetime.now()
         total_processed = sum(t.seconds_processed for t in tasks)
         percent1, eta1, speed1 = calc_progress(total_processed, p.total_src_seconds, t2 - t1)
-        percent2, eta2, speed2 = calc_progress(p.recent_task.seconds_processed, p.recent_task.video_len,
-                                               t2 - p.recent_task.time_started) \
-            if p.recent_task and not p.recent_task.finished \
-            else (0, 0, 0)
-        took2 = (t2 - p.recent_task.time_started).total_seconds() if p.recent_task and not p.recent_task.finished else 0
         num_tasks_remaining = sum(1 for t in tasks if not t.finished)
 
         # msg = f'\rTotal: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | Last: {hms(took2)} → {hms(eta2)}, {speed2:.2f}x | {defs.MAX_WORKERS}x{defs.THREADS}'
@@ -256,12 +252,8 @@ def progress_thread(p: Processor, tasks: list[EncodingTask]):
 
         p.console.clear()
         for task in tasks:
-            if task.resolution == RESOLUTION_SUCCESS:
-                status = 'OK'
-            elif task.resolution == RESOLUTION_ERROR:
-                status = 'ERROR'
-            else:
-                status = task.status
+            status, color = task_color(task)
+
             percent2, eta2, speed2 = calc_progress(task.seconds_processed, task.video_len, t2 - task.time_started) \
                 if not task.finished \
                 else (0, 0, 0)
@@ -269,11 +261,25 @@ def progress_thread(p: Processor, tasks: list[EncodingTask]):
                 if not task.finished \
                 else 0
 
-            p.console.print(f'{status:10s} {task.video_src} | {hms(took2)} → {hms(eta2)}, {speed2:.2f}x')
+            p.console.print(f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:.2f}x | {task.video_src}')
         p.console.print(
             f'Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | {defs.MAX_WORKERS}x{defs.THREADS}')
 
         time.sleep(1.0)
+
+
+def task_color(task: EncodingTask):
+    if task.resolution == RESOLUTION_SUCCESS:
+        return 'OK', 'bright_green'
+    elif task.resolution == RESOLUTION_ERROR:
+        return 'ERROR', 'bright_red'
+    else:
+        if task.status == STATUS_RUNNING:
+            return task.status, 'bright_white'
+        elif task.status == STATUS_AWAITING:
+            return task.status, 'bright_black'
+        else:
+            return task.status, 'bright_yellow'
 
 
 def chart_thread(p: Processor, tasks: list[EncodingTask]):
