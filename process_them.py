@@ -17,7 +17,7 @@ from wakepy.modes import keep
 
 import gui
 import verify
-from helper import get_video_time, get_video_meta, print
+from helper import get_video_time, get_video_meta, log
 
 # todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
 # todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
@@ -32,6 +32,10 @@ STATUS_FINISHED = 'Finished'
 
 RESOLUTION_SUCCESS = 'Success'
 RESOLUTION_ERROR = 'Error'
+
+
+def print(s):
+    raise Exception('Do not print to console')
 
 
 class EncodingTask:
@@ -81,13 +85,13 @@ class Processor:
         ff_params = getattr(defs, defs.PARAM_MAKER)()
         custom_params = re.split(r'\s+', ff_params)
         cmd = ['ffmpeg', '-hide_banner', '-i', str(video_in)] + custom_params + ['-y', str(out_file)]
-        print(f'Exec: {shlex.join(cmd)}')
+        log(f'Exec: {shlex.join(cmd)}')
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8',
                               errors='replace') as proc:
             line_cnt = 0
             for line in proc.stderr:
                 if not self.is_working:
-                    print('call_ffmpeg: terminating ffmpeg')
+                    log('call_ffmpeg: terminating ffmpeg')
                     proc.terminate()
                     proc.wait(defs.WAIT_TIMEOUT)
                     return 255
@@ -106,7 +110,7 @@ class Processor:
 
     def process_video(self, task: EncodingTask):
         task.status = STATUS_RUNNING
-        print(f'process_video: {task}')
+        log(f'process_video: {task}')
         defs = self.defs
         self.recent_task = task
         task.time_started = datetime.datetime.now()
@@ -115,33 +119,33 @@ class Processor:
         src_moved_file = defs.PROCESSED_INPUT_DIR / video_src.name
         create_dirs_for_file(out_moved_file)
         create_dirs_for_file(src_moved_file)
-        print(f'Processing video: {video_src}, duration: {hms(task.video_len)}, started: {task.time_started}')
+        log(f'Processing video: {video_src}, duration: {hms(task.video_len)}, started: {task.time_started}')
         out_tmp_file = self.resolve_target_video_path(video_src, defs.TMP_OUT_DIR)
         create_dirs_for_file(out_tmp_file)
         rc = self.call_ffmpeg(video_src, out_tmp_file, task)
         if rc == 0:
-            print(f'Ffmpeg finished - verifying it: {out_tmp_file}')
+            log(f'Ffmpeg finished - verifying it: {out_tmp_file}')
             if not verify.verify_via_decoding_ffmpeg(out_tmp_file):
-                print(f'ERROR: Video verification failed, gonna continue: {out_tmp_file}')
+                log(f'ERROR: Video verification failed, gonna continue: {out_tmp_file}')
                 self.errors.add(str(video_src))
                 task.set_error()
                 return
-            print(f'Video verified successfully: {out_tmp_file}')
+            log(f'Video verified successfully: {out_tmp_file}')
             create_dirs_for_file(out_moved_file)
-            print(f'Move {out_tmp_file} => {out_moved_file})')
+            log(f'Move {out_tmp_file} => {out_moved_file})')
             shutil.move(out_tmp_file, out_moved_file)
             if defs.MOVE_INPUT_FILE:
-                print(f'Move {video_src} => {src_moved_file}')
+                log(f'Move {video_src} => {src_moved_file}')
                 create_dirs_for_file(src_moved_file)
                 shutil.move(video_src, src_moved_file)
             self.success.add(str(video_src))
             task.set_success()
         elif rc == 255:
-            print('Ctrl+C detected on ffmpeg')
+            log('Ctrl+C detected on ffmpeg')
             self.mark_as_stopping()
             task.set_error()
         else:
-            print(f'Ffmpeg finished with rc: {rc}')
+            log(f'Ffmpeg finished with rc: {rc}')
             self.errors.add(str(video_src))
             task.set_error()
 
@@ -153,14 +157,14 @@ class Processor:
             video_src = Path(f)
             videos, audios = get_video_meta(video_src)
             if len(videos) != 1:
-                print(f'ERROR: Abnormal number of video streams: {len(videos)} in {video_src}')
+                log(f'ERROR: Abnormal number of video streams: {len(videos)} in {video_src}')
                 return False
             if videos[0]['codec_name'] == 'hevc':
-                print(f'ERROR: Video is H265 already: {video_src}')
+                log(f'ERROR: Video is H265 already: {video_src}')
                 return False
             video_dst = self.resolve_target_video_path(video_src, defs.OUT_DIR)
             if video_dst.exists():
-                print(f'ERROR: Destination file already exists: {video_dst}')
+                log(f'ERROR: Destination file already exists: {video_dst}')
                 return False
             create_dirs_for_file(video_dst)
             # if not is_same_disk(video_src, video_dst.parent):
@@ -182,7 +186,7 @@ class Processor:
                 files_to_process = list(dict.fromkeys(files_to_process))  # del duplicates
                 files_to_process = list(filter(filter_videos, files_to_process))
                 if not files_to_process:
-                    print('The queue is all processed. Stopping.')
+                    log('The queue is all processed. Stopping.')
                     beep()
                     break
                 self.total_src_seconds = 0
@@ -191,7 +195,7 @@ class Processor:
                     video_len = int(get_video_time(Path(video_src)))
                     self.total_src_seconds += video_len
                     tasks.append(EncodingTask(video_src, video_len))
-                print(f'Total source duration: {dhms(self.total_src_seconds)}')
+                log(f'Total source duration: {dhms(self.total_src_seconds)}')
                 self.time_started = datetime.datetime.now()
                 # self.ui.start()
                 for task in tasks:
@@ -202,15 +206,15 @@ class Processor:
                 pt.start()
                 # threading.Thread(target=chart_thread, args=[tasks], daemon=False).start()
                 # chart_thread(tasks)
-                print(f'Waiting for the futures')
+                log(f'Waiting for the futures')
                 for future in as_completed(futures):
                     task = future.result()
-                    print(f'Task completed: {task}')
-                print(f'All futures completed')
+                    log(f'Task completed: {task}')
+                log(f'All futures completed')
                 self.mark_as_stopping()
-                print('Joining the progress thread')
+                log('Joining the progress thread')
                 pt.join()
-                print('Joined the progress thread')
+                log('Joined the progress thread')
                 break
         self.executor = None
 
@@ -218,22 +222,22 @@ class Processor:
         try:
             with keep.running():
                 t1 = datetime.datetime.now()
-                print(f'')
-                print(f'')
-                print(f'')
-                print(f'Program started {t1}')
+                log(f'')
+                log(f'')
+                log(f'')
+                log(f'Program started {t1}')
                 self.start_impl()
                 t2 = datetime.datetime.now()
-                print(f'Total processing time: {t2 - t1}, now {datetime.datetime.now()}')
+                log(f'Total processing time: {t2 - t1}, now {datetime.datetime.now()}')
         except KeyboardInterrupt:
             self.mark_as_stopping()
-            print(datetime.datetime.now())
-            print('Bye!')
+            log(datetime.datetime.now())
+            log('Bye!')
         except Exception:
             traceback.print_exc()
             self.mark_as_stopping()
-            print(datetime.datetime.now())
-            print('Bye!')
+            log(datetime.datetime.now())
+            log('Bye!')
 
 
 def encoder_thread(p: Processor, task: EncodingTask):

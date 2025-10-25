@@ -3,7 +3,11 @@ import subprocess
 from pathlib import Path
 
 import process_them
-from helper import print
+from helper import log
+
+
+def print(s):
+    raise Exception('Do not print to console')
 
 
 def verify_bad_ext():
@@ -14,12 +18,12 @@ def verify_bad_ext():
             cnt += 1
             p = subprocess.run(['ffprobe', fstr], stderr=subprocess.PIPE, text=True, encoding='utf-8')
             if p.returncode != 0:
-                print(fstr)
+                log(fstr)
             assert p.returncode == 0
             is_mkv = 'matroska' in p.stderr
             if (fstr.endswith('.mp4') and is_mkv) or (fstr.endswith('.mkv') and not is_mkv):
-                print(f'ERROR: {f}')
-    print(f'Found {cnt} videos')
+                log(f'ERROR: {f}')
+    log(f'Found {cnt} videos')
 
 
 def verify_missing_files():
@@ -27,7 +31,7 @@ def verify_missing_files():
     names2 = set([f.stem for f in process_them.PROCESSED_INPUT_DIR.rglob('*')])
     diff = names1.difference(names2)
     if diff:
-        print(f'FAILED verify_missing_files: {diff}')
+        log(f'FAILED verify_missing_files: {diff}')
 
 
 def _verify_frames(f: Path):
@@ -43,11 +47,11 @@ def _verify_frames(f: Path):
                 p.terminate()
                 break
     if errors:
-        print(f'ERROR {f}')
+        log(f'ERROR {f}')
         for error in errors:
-            print(f'> {error}')
+            log(f'> {error}')
     else:
-        print(f'OKAY  {f}')
+        log(f'OKAY  {f}')
     return not bool(errors)
 
 
@@ -69,11 +73,11 @@ def verify_via_decoding_ffmpeg(f: Path):
                 p.terminate()
                 break
     if errors:
-        print(f'ERROR {f}')
+        log(f'ERROR {f}')
         for error in errors:
-            print(f'> {error}')
+            log(f'> {error}')
     else:
-        print(f'OKAY  {f}')
+        log(f'OKAY  {f}')
     return not bool(errors)
 
 
@@ -86,8 +90,8 @@ def verify_via_decoding():
             okays += 1
         else:
             bads += 1
-    print(f'okays: {okays}')
-    print(f'bads: {bads}')
+    log(f'okays: {okays}')
+    log(f'bads: {bads}')
 
 
 if __name__ == '__main__':
@@ -99,4 +103,4 @@ if __name__ == '__main__':
     verify_via_decoding_ffmpeg(Path('D:/vikorzu-d/reenc-done-output/В главных ролях： Юра Борисов  [795374dd-5690-45aa-bf80-768f3cffaafe].mkv'))
     # verify_via_decoding_ffmpeg(Path('D:/vikorzu-d/reenc-done-output/Чужой Земля 6.mkv'))
     t2 = datetime.datetime.now()
-    print(f'took: {t2 - t1}')
+    log(f'took: {t2 - t1}')

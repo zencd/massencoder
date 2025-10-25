@@ -22,6 +22,10 @@ from utils import create_dirs_for_file, PersistentList, hms, dhms, beep, is_same
 
 
 def print(s):
+    raise Exception('Do not print to console')
+
+
+def log(s):
     with open('log.txt', 'a', encoding='utf-8') as f:
         f.write(f'{s}\n')
 
