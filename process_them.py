@@ -126,10 +126,10 @@ class Processor:
         if rc == 0:
             log(f'Ffmpeg finished - verifying it: {out_tmp_file}')
             if not verify.verify_via_decoding_ffmpeg(out_tmp_file):
-                log(f'ERROR: Video verification failed, gonna continue: {out_tmp_file}')
+                log(f'ERROR: Video verification failed: {out_tmp_file}')
                 self.errors.add(str(video_src))
                 task.set_error()
-                return
+                # return
             log(f'Video verified successfully: {out_tmp_file}')
             create_dirs_for_file(out_moved_file)
             log(f'Move {out_tmp_file} => {out_moved_file})')
@@ -263,21 +263,22 @@ def progress_thread(p: Processor, tasks: list[EncodingTask]):
         # msg = f'\rTotal: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | Last: {hms(took2)} → {hms(eta2)}, {speed2:.2f}x | {defs.MAX_WORKERS}x{defs.THREADS}'
         # sys.stdout.write(msg)
 
+        tasks_current = [t for t in tasks if t.status == STATUS_RUNNING]
+        tasks_finished = [t for t in tasks if t.status == STATUS_FINISHED][0:10]
+
         p.console.clear()
-        for task in tasks:
-            status, color = task_color(task)
-
-            percent2, eta2, speed2 = calc_progress(task.seconds_processed, task.video_len, t2 - task.time_started) \
-                if not task.finished \
-                else (0, 0, 0)
-            took2 = (t2 - task.time_started).total_seconds() \
-                if not task.finished \
-                else 0
-
-            p.console.print(f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:5.2f}x | {task.video_src}')
+        for task_group in [tasks_current, tasks_finished]:
+            for task in task_group:
+                status, color = task_color(task)
+                percent2, eta2, speed2 = calc_progress(task.seconds_processed, task.video_len, t2 - task.time_started) \
+                    if not task.finished \
+                    else (0, 0, 0)
+                took2 = (t2 - task.time_started).total_seconds() \
+                    if not task.finished \
+                    else 0
+                p.console.print(f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:5.2f}x | {task.video_src}')
         p.console.print(
             f'Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:5.2f}x, {num_tasks_remaining} tasks | {defs.MAX_WORKERS}x{defs.THREADS}')
-
         time.sleep(1.0)
 
 
