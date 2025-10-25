@@ -20,12 +20,19 @@ from wakepy.modes import keep
 
 from utils import create_dirs_for_file, PersistentList, hms, dhms, beep, is_same_disk
 
+
+def print(s):
+    with open('log.txt', 'a', encoding='utf-8') as f:
+        f.write(f'{s}\n')
+
+
 def get_video_time(video: Path):
     base = 'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1'.split(' ')
     cmd = base + [str(video)]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
     assert result.returncode == 0
     return float(result.stdout.strip())
+
 
 def get_video_meta(video: Path):
     args = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', str(video)]

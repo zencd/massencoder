@@ -17,9 +17,14 @@ from wakepy.modes import keep
 
 import gui
 import verify
-from helper import get_video_time, get_video_meta
+from helper import get_video_time, get_video_meta, print
+
+# todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
+# todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
+# todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
 from ui_terminal import UiTerminal
-from utils import create_dirs_for_file, hms, dhms, beep, is_same_disk, PersistentList, calc_progress
+
+from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, calc_progress
 
 STATUS_AWAITING = 'Awaiting'
 STATUS_RUNNING = 'Running'
@@ -27,11 +32,6 @@ STATUS_FINISHED = 'Finished'
 
 RESOLUTION_SUCCESS = 'Success'
 RESOLUTION_ERROR = 'Error'
-
-
-def print(s: str):
-    with open('log.txt', 'a', encoding='utf-8') as f:
-        f.write(s + '\n')
 
 
 class EncodingTask:
@@ -218,6 +218,10 @@ class Processor:
         try:
             with keep.running():
                 t1 = datetime.datetime.now()
+                print(f'')
+                print(f'')
+                print(f'')
+                print(f'Program started {t1}')
                 self.start_impl()
                 t2 = datetime.datetime.now()
                 print(f'Total processing time: {t2 - t1}, now {datetime.datetime.now()}')

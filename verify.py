@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 
 import process_them
+from helper import print
 
 
 def verify_bad_ext():
