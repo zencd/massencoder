@@ -29,6 +29,11 @@ RESOLUTION_SUCCESS = 'Success'
 RESOLUTION_ERROR = 'Error'
 
 
+def print(s: str):
+    with open('log.txt', 'a', encoding='utf-8') as f:
+        f.write(s + '\n')
+
+
 class EncodingTask:
     def __init__(self, video_src: str, video_len: int):
         self.video_src = Path(video_src)
@@ -261,9 +266,9 @@ def progress_thread(p: Processor, tasks: list[EncodingTask]):
                 if not task.finished \
                 else 0
 
-            p.console.print(f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:.2f}x | {task.video_src}')
+            p.console.print(f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:5.2f}x | {task.video_src}')
         p.console.print(
-            f'Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | {defs.MAX_WORKERS}x{defs.THREADS}')
+            f'Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:5.2f}x, {num_tasks_remaining} tasks | {defs.MAX_WORKERS}x{defs.THREADS}')
 
         time.sleep(1.0)
 
