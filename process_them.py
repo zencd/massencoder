@@ -28,9 +28,13 @@ STATUS_FINISHED = 'Finished'
 RESOLUTION_SUCCESS = 'Success'
 RESOLUTION_ERROR = 'Error'
 
+g_task_cnt = 0
 
 class EncodingTask:
     def __init__(self, video_src: str, video_len: int):
+        global g_task_cnt
+        g_task_cnt += 1
+        self.uid = g_task_cnt
         self.video_src = Path(video_src)
         self.video_len = video_len
         self.seconds_processed = 0
@@ -38,6 +42,8 @@ class EncodingTask:
         self.status = STATUS_AWAITING
         self.time_started = datetime.datetime.now()
         self.resolution = ''
+        self.future = None
+        self.thread = None
 
     def __str__(self):
         return f'EncodingTask({self.video_src}, finished={self.finished})'

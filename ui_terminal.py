@@ -1,11 +1,11 @@
 from textual.widgets import ListItem, Label
 
-from tui3 import MyApp
+from tui3 import TuiApp
 
 
 class UiTerminal:
     def __init__(self):
-        self.app = MyApp()
+        self.app = TuiApp()
 
     def start(self):
         self.app.run()
