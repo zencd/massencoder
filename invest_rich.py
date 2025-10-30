@@ -20,15 +20,15 @@ def make_layout() -> Layout:
     return layout
 
 
-def make_left_panel(counter: int) -> Panel:
+def make_left_panel(counter: int):
     """Создаёт таблицу со списком элементов."""
-    table = Table(title="Список элементов")
+    table = Table(show_header=False)
     table.add_column("№", justify="right", width=3)
     table.add_column("Имя", justify="left", width=15)
-
-    for i in range(1, 6):
+    for i in range(1, 16):
         table.add_row(str(i), f"Элемент {i + counter}")
-    return Panel(table, title="Левая панель")
+    # return Panel(table, title="Задачи")
+    return table
 
 
 def make_right_panel(counter: int) -> Panel:
