@@ -47,4 +47,10 @@ def get_video_meta(video: Path):
     f = j['format']
     videos = list(filter(lambda x: x['codec_type'] == 'video', j['streams']))
     audios = list(filter(lambda x: x['codec_type'] == 'audio', j['streams']))
-    return videos, audios
+    return f, videos, audios
+
+
+def calc_fps(video_meta: dict):
+    r_frame_rate: str = video_meta['r_frame_rate']
+    slash = r_frame_rate.index('/')
+    return float(r_frame_rate[0:slash]) / float(r_frame_rate[slash + 1:])

@@ -1,4 +1,7 @@
+import math
 from pathlib import Path
+
+from process_them import EncodingTask
 
 MAX_WORKERS = 3
 THREADS = 4
@@ -16,15 +19,17 @@ TARGET_EXT = 'mkv'
 WAIT_TIMEOUT = 60.0
 # PARAM_MAKER = 'ffmpeg_265_128'
 PARAM_MAKER = 'ffmpeg_265_copy'
+GOP_SIZE_SECONDS = 2
 
 
 # `-map 0` -- otherwise ffmpeg will skip alternate audio tracks: 2nd one and others
 # `-map_metadata -1` -- ffmpeg copies metadata from input file, which results in misleading tags like: BPS, NUMBER_OF_BYTES, DURATION...
 
-def video_flags_265():
+def video_flags_265(task: 'EncodingTask'):
     encoder = 'libx265'
+    keyint = math.ceil(task.fps * GOP_SIZE_SECONDS)
 
-    x265_params = ['open-gop=0', 'log-level=error']
+    x265_params = ['open-gop=0', f'keyint={keyint}', 'log-level=error']
     threads_opt = ''
     if THREADS > 0:
         x265_params.append(f'pools={THREADS}')
@@ -57,13 +62,13 @@ def audio_flags_copy():
     return f'-c:a copy'
 
 
-def ffmpeg_265_128():
-    video, container = video_flags_265()
+def ffmpeg_265_128(task: 'EncodingTask'):
+    video, container = video_flags_265(task)
     audio = audio_flags_128()
     return f'{video} {audio} {container}'
 
 
-def ffmpeg_265_copy():
-    video, container = video_flags_265()
+def ffmpeg_265_copy(task: 'EncodingTask'):
+    video, container = video_flags_265(task)
     audio = audio_flags_copy()
     return f'{video} {audio} {container}'

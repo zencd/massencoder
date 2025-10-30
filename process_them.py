@@ -17,14 +17,14 @@ from wakepy.modes import keep
 
 import gui
 import verify
-from helper import get_video_time, get_video_meta, log
+from helper import get_video_time, get_video_meta, log, calc_fps
 
 # todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
 # todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
 # todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
 from ui_terminal import UiTerminal
 
-from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, calc_progress
+from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, calc_progress, clear_scrollback
 
 STATUS_AWAITING = 'Awaiting'
 STATUS_RUNNING = 'Running'
@@ -39,14 +39,19 @@ def print(s):
 
 
 class EncodingTask:
-    def __init__(self, video_src: str, video_len: int):
+    def __init__(self, video_src: str):
         self.video_src = Path(video_src)
-        self.video_len = video_len
+        self.video_len = 0
         self.seconds_processed = 0
         self.finished = False
         self.status = STATUS_AWAITING
         self.time_started = datetime.datetime.now()
         self.resolution = ''
+        self.format = dict()
+        self.videos = []
+        self.audios = []
+        self.bit_rate_kilo = 0
+        self.fps = 0.0
 
     def __str__(self):
         return f'EncodingTask({self.video_src}, finished={self.finished})'
@@ -82,7 +87,7 @@ class Processor:
 
     def call_ffmpeg(self, video_in: Path, out_file: Path, task: EncodingTask):
         defs = self.defs
-        ff_params = getattr(defs, defs.PARAM_MAKER)()
+        ff_params = getattr(defs, defs.PARAM_MAKER)(task)
         custom_params = re.split(r'\s+', ff_params)
         cmd = ['ffmpeg', '-hide_banner', '-i', str(video_in)] + custom_params + ['-y', str(out_file)]
         log(f'Exec: {shlex.join(cmd)}')
@@ -153,15 +158,27 @@ class Processor:
         self.is_working = False
 
     def start_impl(self):
-        def filter_videos(f: str):
-            video_src = Path(f)
-            videos, audios = get_video_meta(video_src)
+        def path_to_task(f: str):
+            format_, videos, audios = get_video_meta(Path(f))
+            task = EncodingTask(f)
+            task.format = format_
+            task.videos = videos
+            task.audios = audios
+            task.video_len = float(format_['duration'])
+            task.bit_rate_kilo = int(format_['bit_rate']) // 1000
+            task.fps = calc_fps(videos[0])
+            return task
+
+        def filter_videos(task: EncodingTask):
+            video_src = task.video_src
+            videos, audios = task.videos, task.audios
             if len(videos) != 1:
                 log(f'ERROR: Abnormal number of video streams: {len(videos)} in {video_src}')
                 return False
             if videos[0]['codec_name'] in {'hevc', 'vp9'}:
                 log(f'ERROR: Video is H265 already: {video_src}')
                 return False
+
             video_dst = self.resolve_target_video_path(video_src, defs.OUT_DIR)
             if video_dst.exists():
                 log(f'ERROR: Destination file already exists: {video_dst}')
@@ -176,7 +193,6 @@ class Processor:
             self.executor = executor
             while True:
                 self.is_working = True
-                tasks = []
                 self.que.reload()
                 file_is_ok_to_process = lambda fn: (fn not in self.success.lines) and \
                                                    (fn not in self.errors.lines) and \
@@ -184,20 +200,17 @@ class Processor:
                                                    os.path.isfile(fn)
                 files_to_process = [fn for fn in self.que.lines if file_is_ok_to_process(fn)]
                 files_to_process = list(dict.fromkeys(files_to_process))  # del duplicates
-                files_to_process = list(filter(filter_videos, files_to_process))
-                if not files_to_process:
+                tasks: list[EncodingTask] = list(map(path_to_task, files_to_process))
+                tasks = list(filter(filter_videos, tasks))
+                if not tasks:
                     log('The queue is all processed. Stopping.')
                     beep()
                     break
-                self.total_src_seconds = 0
-                futures = []
-                for video_src in files_to_process:
-                    video_len = int(get_video_time(Path(video_src)))
-                    self.total_src_seconds += video_len
-                    tasks.append(EncodingTask(video_src, video_len))
+                self.total_src_seconds = sum(t.video_len for t in tasks)
                 log(f'Total source duration: {dhms(self.total_src_seconds)}')
                 self.time_started = datetime.datetime.now()
                 # self.ui.start()
+                futures = []
                 for task in tasks:
                     self.tasks.append(task)
                     # self.ui.add_task(task)
@@ -241,14 +254,17 @@ class Processor:
 
 
 def encoder_thread(p: Processor, task: EncodingTask):
+    work_done = False
     try:
         if p.is_working and not task.finished:
             p.process_video(task)
+            work_done = True
         return task
     finally:
         task.finished = True
         task.status = STATUS_FINISHED
-        beep()
+        if work_done:
+            beep()
 
 
 def progress_thread(p: Processor, tasks: list[EncodingTask]):
@@ -267,6 +283,7 @@ def progress_thread(p: Processor, tasks: list[EncodingTask]):
         tasks_finished = [t for t in tasks if t.status == STATUS_FINISHED][0:10]
 
         p.console.clear()
+        # clear_scrollback()
         for task_group in [tasks_current, tasks_finished]:
             for task in task_group:
                 status, color = task_color(task)
@@ -276,7 +293,7 @@ def progress_thread(p: Processor, tasks: list[EncodingTask]):
                 took2 = (t2 - task.time_started).total_seconds() \
                     if not task.finished \
                     else 0
-                p.console.print(f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:5.2f}x | {task.video_src}')
+                p.console.print(f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:5.2f}x, {task.bit_rate_kilo:4d}k {task.fps:.2f}fps | {task.video_src}')
         p.console.print(
             f'Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:5.2f}x, {num_tasks_remaining} tasks | {defs.MAX_WORKERS}x{defs.THREADS}')
         time.sleep(1.0)

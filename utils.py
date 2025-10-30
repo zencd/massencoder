@@ -7,6 +7,11 @@ from pathlib import Path
 from typing import Union
 
 
+def clear_scrollback():
+    sys.stdout.write("\033[3J")
+    sys.stdout.flush()
+
+
 def is_same_disk(one: Path, two: Path):
     return os.stat(str(one)).st_dev == os.stat(str(two)).st_dev
 
