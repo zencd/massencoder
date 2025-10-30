@@ -159,7 +159,7 @@ class Processor:
             if len(videos) != 1:
                 log(f'ERROR: Abnormal number of video streams: {len(videos)} in {video_src}')
                 return False
-            if videos[0]['codec_name'] == 'hevc':
+            if videos[0]['codec_name'] in {'hevc', 'vp9'}:
                 log(f'ERROR: Video is H265 already: {video_src}')
                 return False
             video_dst = self.resolve_target_video_path(video_src, defs.OUT_DIR)
