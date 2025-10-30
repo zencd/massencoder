@@ -18,7 +18,7 @@ from wakepy.modes import keep
 import defs
 import gui
 import verify
-from helper import get_video_meta, log, calc_fps
+from helper import get_video_meta, log, calc_fps, log_clear
 
 # todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
 # todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
@@ -88,7 +88,7 @@ class Processor:
         self.tasks: list[EncodingTask] = []
         # self.ui = UiTerminal()
         self.console = rich.console.Console()
-        self.stopping = False
+        self.stopping_softly = False
         self.max_workers = defs.MAX_WORKERS
 
     def call_ffmpeg(self, video_in: Path, out_file: Path, task: EncodingTask):
@@ -207,7 +207,7 @@ class Processor:
         return sum(1 for t in self.tasks if t.status == STATUS_RUNNING)
 
     def try_enqueue_task(self, task: EncodingTask):
-        if self.stopping:
+        if not self.is_working or self.stopping_softly:
             return
         if self.num_running_tasks() < self.max_workers:
             t = threading.Thread(target=self.encoder_thread, args=[task], daemon=True)
@@ -217,7 +217,7 @@ class Processor:
             log(f'Task started immediately: {task}')
 
     def wait_for_all_threads(self):
-        while True:
+        while self.is_working:
             threads = [task.thread for task in self.tasks if task.thread and task.thread.is_alive()]
             if threads:
                 log('Waiting for all threads')
@@ -227,17 +227,19 @@ class Processor:
                         # one thread finished
                         self.try_start_new_tasks()
             else:
+                log('no threads running, set is_working to false')
+                self.is_working = False
                 break
+        log('wait_for_all_threads finished')
 
     def try_start_new_tasks(self):
-        if self.stopping:
+        if not self.is_working or self.stopping_softly:
             return
         new_tasks = [task for task in self.tasks if task.status == STATUS_AWAITING]
         for task in new_tasks:
             self.try_enqueue_task(task)
 
     def start_impl(self):
-        defs = self.defs
         self.is_working = True
         self.que.reload()
         tasks = self.load_tasks()
@@ -252,8 +254,12 @@ class Processor:
         self.try_start_new_tasks()
         progress_thread = threading.Thread(target=progress_function, args=[self, tasks], daemon=True)
         progress_thread.start()
-        while True:
-            time.sleep(0.1)
+
+        wait_thread = threading.Thread(target=self.wait_for_all_threads, args=[], daemon=False)
+        wait_thread.start()
+
+        while self.is_working:
+            time.sleep(0.5)
             ch = getch() # todo does it overload cpu?
             log(f'getch: {ch}')
             if ch == 'q':
@@ -262,7 +268,8 @@ class Processor:
                 break
             elif ch == 's':
                 log('User chose to stop')
-                self.stopping = True
+                self.stopping_softly = True
+                break
             elif ch == '-':
                 log('User chose to decrease')
                 if self.max_workers >= 2:
@@ -271,8 +278,13 @@ class Processor:
                 log('User chose to increase')
                 self.max_workers += 1
                 self.try_start_new_tasks()
-        self.wait_for_all_threads()
-        self.mark_as_stopping()
+
+        # self.mark_as_stopping()
+
+        log('Joining the wait_thread')
+        wait_thread.join()
+        log('Joined the wait_thread')
+
         log('Joining the progress thread')
         progress_thread.join()
         log('Joined the progress thread')
@@ -281,9 +293,7 @@ class Processor:
         try:
             with keep.running():
                 t1 = datetime.datetime.now()
-                log(f'')
-                log(f'')
-                log(f'')
+                log_clear()
                 log(f'Program started {t1}')
                 self.start_impl()
                 t2 = datetime.datetime.now()
@@ -344,9 +354,12 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
                     else 0
                 p.console.print(
                     f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:5.2f}x, {task.bit_rate_kilo:4d}k {task.fps:.2f}fps {task.video_src}')
-        p.console.print(
-            f'[white]Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:5.2f}x, {num_tasks_remaining} remains | {p.max_workers}x{defs.THREADS}')
+        msg = f'[white]Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:5.2f}x, {num_tasks_remaining} remains | {p.max_workers}x{defs.THREADS}'
+        msg = f'{msg} | stopping softly' if p.stopping_softly else msg
+        msg = f'{msg} | not working' if not p.is_working else msg
+        p.console.print(msg)
         time.sleep(1.0)
+    log('progress_function finished')
 
 
 def task_color(task: EncodingTask):

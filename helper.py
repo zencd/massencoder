@@ -13,6 +13,11 @@ def log(s):
         f.write(f'{s}\n')
 
 
+def log_clear():
+    with open('log.txt', 'w', encoding='utf-8') as f:
+        f.write('')
+
+
 def get_video_meta(video: Path):
     args = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', str(video)]
     res = subprocess.run(args, stdout=subprocess.PIPE)
