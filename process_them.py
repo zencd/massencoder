@@ -17,7 +17,7 @@ from wakepy.modes import keep
 
 import gui
 import verify
-from helper import get_video_time, get_video_meta, log, calc_fps
+from helper import get_video_meta, log, calc_fps
 
 # todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
 # todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
@@ -130,7 +130,7 @@ class Processor:
         rc = self.call_ffmpeg(video_src, out_tmp_file, task)
         if rc == 0:
             log(f'Ffmpeg finished - verifying it: {out_tmp_file}')
-            if not verify.verify_via_decoding_ffmpeg(out_tmp_file):
+            if defs.DO_VERIFY and not verify.verify_via_decoding_ffmpeg(out_tmp_file):
                 log(f'ERROR: Video verification failed: {out_tmp_file}')
                 self.errors.add(str(video_src))
                 task.set_error()
@@ -280,7 +280,7 @@ def progress_thread(p: Processor, tasks: list[EncodingTask]):
         # sys.stdout.write(msg)
 
         tasks_current = [t for t in tasks if t.status == STATUS_RUNNING]
-        tasks_finished = [t for t in tasks if t.status == STATUS_FINISHED][0:10]
+        tasks_finished = [t for t in tasks if t.status == STATUS_FINISHED][0:5]
 
         p.console.clear()
         # clear_scrollback()
@@ -295,18 +295,18 @@ def progress_thread(p: Processor, tasks: list[EncodingTask]):
                     else 0
                 p.console.print(f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:5.2f}x, {task.bit_rate_kilo:4d}k {task.fps:.2f}fps | {task.video_src}')
         p.console.print(
-            f'Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:5.2f}x, {num_tasks_remaining} tasks | {defs.MAX_WORKERS}x{defs.THREADS}')
+            f'[white]Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:5.2f}x, {num_tasks_remaining} remains | {defs.MAX_WORKERS}x{defs.THREADS}')
         time.sleep(1.0)
 
 
 def task_color(task: EncodingTask):
     if task.resolution == RESOLUTION_SUCCESS:
-        return 'OK', 'bright_green'
+        return 'OK', 'dark_sea_green4'
     elif task.resolution == RESOLUTION_ERROR:
         return 'ERROR', 'bright_red'
     else:
         if task.status == STATUS_RUNNING:
-            return task.status, 'bright_white'
+            return task.status, 'turquoise2'
         elif task.status == STATUS_AWAITING:
             return task.status, 'bright_black'
         else:
