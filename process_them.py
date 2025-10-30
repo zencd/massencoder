@@ -215,8 +215,8 @@ class Processor:
                     self.tasks.append(task)
                     # self.ui.add_task(task)
                     futures.append(executor.submit(encoder_thread, self, task))
-                pt = threading.Thread(target=progress_thread, args=[self, tasks], daemon=True)
-                pt.start()
+                progress_thread = threading.Thread(target=progress_function, args=[self, tasks], daemon=True)
+                progress_thread.start()
                 # threading.Thread(target=chart_thread, args=[tasks], daemon=False).start()
                 # chart_thread(tasks)
                 log(f'Waiting for the futures')
@@ -226,7 +226,7 @@ class Processor:
                 log(f'All futures completed')
                 self.mark_as_stopping()
                 log('Joining the progress thread')
-                pt.join()
+                progress_thread.join()
                 log('Joined the progress thread')
                 break
         self.executor = None
@@ -267,7 +267,7 @@ def encoder_thread(p: Processor, task: EncodingTask):
             beep()
 
 
-def progress_thread(p: Processor, tasks: list[EncodingTask]):
+def progress_function(p: Processor, tasks: list[EncodingTask]):
     defs = p.defs
     t1 = datetime.datetime.now()
     while p.is_working:
@@ -293,7 +293,7 @@ def progress_thread(p: Processor, tasks: list[EncodingTask]):
                 took2 = (t2 - task.time_started).total_seconds() \
                     if not task.finished \
                     else 0
-                p.console.print(f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:5.2f}x, {task.bit_rate_kilo:4d}k {task.fps:.2f}fps | {task.video_src}')
+                p.console.print(f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:5.2f}x, {task.bit_rate_kilo:4d}k {task.fps:.2f}fps {task.video_src}')
         p.console.print(
             f'[white]Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:5.2f}x, {num_tasks_remaining} remains | {defs.MAX_WORKERS}x{defs.THREADS}')
         time.sleep(1.0)
@@ -311,16 +311,6 @@ def task_color(task: EncodingTask):
             return task.status, 'bright_black'
         else:
             return task.status, 'bright_yellow'
-
-
-def chart_thread(p: Processor, tasks: list[EncodingTask]):
-    def value_generator():
-        total_processed = sum(t.seconds_processed for t in tasks)
-        percent1, eta1, speed1 = calc_progress(total_processed, p.total_src_seconds,
-                                               datetime.datetime.now() - p.time_started)
-        return speed1
-
-    gui.show_window(value_generator, 60 * 1000)
 
 
 if __name__ == '__main__':
