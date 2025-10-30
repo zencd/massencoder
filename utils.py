@@ -5,6 +5,33 @@ import sys
 import datetime
 from pathlib import Path
 from typing import Union
+import threading
+
+import sys
+
+
+def getch():
+    try:
+        # Windows
+        import msvcrt
+        return msvcrt.getch().decode()
+    except ImportError:
+        import tty
+        import termios
+        # Unix
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return ch
+
+
+def join_all(threads: list[threading.Thread]):
+    for thread in threads:
+        thread.join()
 
 
 def clear_scrollback():

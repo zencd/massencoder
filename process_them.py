@@ -15,6 +15,7 @@ from pathlib import Path
 import rich
 from wakepy.modes import keep
 
+import defs
 import gui
 import verify
 from helper import get_video_meta, log, calc_fps
@@ -24,7 +25,8 @@ from helper import get_video_meta, log, calc_fps
 # todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
 from ui_terminal import UiTerminal
 
-from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, calc_progress, clear_scrollback
+from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, calc_progress, clear_scrollback, join_all, \
+    getch
 
 STATUS_AWAITING = 'Awaiting'
 STATUS_RUNNING = 'Running'
@@ -78,15 +80,16 @@ class Processor:
         self.is_working = False
         self.time_started = datetime.datetime.now()
         self.recent_task: typing.Optional['EncodingTask'] = None
-        self.executor: typing.Optional[ThreadPoolExecutor] = None
         self.total_src_seconds = 0
         self.defs = defs
         self.que = PersistentList('list-que.txt')
         self.success = PersistentList('list-success.txt')
         self.errors = PersistentList('list-error.txt')
-        self.tasks = []
+        self.tasks: list[EncodingTask] = []
         # self.ui = UiTerminal()
         self.console = rich.console.Console()
+        self.stopping = False
+        self.max_workers = defs.MAX_WORKERS
 
     def call_ffmpeg(self, video_in: Path, out_file: Path, task: EncodingTask):
         defs = self.defs
@@ -200,40 +203,79 @@ class Processor:
         #     raise Exception(f'Files {video_src} and {video_dst} belongs to different volumes')
         return True
 
+    def num_running_tasks(self):
+        return sum(1 for t in self.tasks if t.status == STATUS_RUNNING)
+
+    def try_enqueue_task(self, task: EncodingTask):
+        if self.stopping:
+            return
+        if self.num_running_tasks() < self.max_workers:
+            t = threading.Thread(target=self.encoder_thread, args=[task], daemon=True)
+            task.thread = t
+            task.status = STATUS_RUNNING
+            t.start()
+            log(f'Task started immediately: {task}')
+
+    def wait_for_all_threads(self):
+        while True:
+            threads = [task.thread for task in self.tasks if task.thread and task.thread.is_alive()]
+            if threads:
+                log('Waiting for all threads')
+                for t in threads:
+                    t.join(1.0)
+                    if not t.is_alive():
+                        # one thread finished
+                        self.try_start_new_tasks()
+            else:
+                break
+
+    def try_start_new_tasks(self):
+        if self.stopping:
+            return
+        new_tasks = [task for task in self.tasks if task.status == STATUS_AWAITING]
+        for task in new_tasks:
+            self.try_enqueue_task(task)
+
     def start_impl(self):
         defs = self.defs
-        with ThreadPoolExecutor(max_workers=defs.MAX_WORKERS) as executor:
-            self.executor = executor
-            while True:
-                self.is_working = True
-                self.que.reload()
-                tasks = self.load_tasks()
-                if not tasks:
-                    log('The queue is all processed. Stopping.')
-                    beep()
-                    break
-                self.tasks = tasks
-                self.total_src_seconds = sum(t.video_len for t in tasks)
-                log(f'Total source duration: {dhms(self.total_src_seconds)}')
-                self.time_started = datetime.datetime.now()
-                futures = []
-                for task in tasks:
-                    futures.append(executor.submit(encoder_thread, self, task))
-                progress_thread = threading.Thread(target=progress_function, args=[self, tasks], daemon=True)
-                progress_thread.start()
-                # threading.Thread(target=chart_thread, args=[tasks], daemon=False).start()
-                # chart_thread(tasks)
-                log(f'Waiting for the futures')
-                for future in as_completed(futures):
-                    task = future.result()
-                    log(f'Task completed: {task}')
-                log(f'All futures completed')
+        self.is_working = True
+        self.que.reload()
+        tasks = self.load_tasks()
+        if not tasks:
+            log('The queue is all processed. Stopping.')
+            beep()
+            return
+        self.tasks: list[EncodingTask] = tasks
+        self.total_src_seconds = sum(t.video_len for t in tasks)
+        log(f'Total source duration: {dhms(self.total_src_seconds)}')
+        self.time_started = datetime.datetime.now()
+        self.try_start_new_tasks()
+        progress_thread = threading.Thread(target=progress_function, args=[self, tasks], daemon=True)
+        progress_thread.start()
+        while True:
+            time.sleep(0.1)
+            ch = getch() # todo does it overload cpu?
+            log(f'getch: {ch}')
+            if ch == 'q':
+                log('User chose to quit')
                 self.mark_as_stopping()
-                log('Joining the progress thread')
-                progress_thread.join()
-                log('Joined the progress thread')
                 break
-        self.executor = None
+            elif ch == 's':
+                log('User chose to stop')
+                self.stopping = True
+            elif ch == '-':
+                log('User chose to decrease')
+                if self.max_workers >= 2:
+                    self.max_workers -= 1
+            elif ch == '=':
+                log('User chose to increase')
+                self.max_workers += 1
+                self.try_start_new_tasks()
+        self.wait_for_all_threads()
+        self.mark_as_stopping()
+        log('Joining the progress thread')
+        progress_thread.join()
+        log('Joined the progress thread')
 
     def start(self):
         try:
@@ -256,19 +298,22 @@ class Processor:
             log(datetime.datetime.now())
             log('Bye!')
 
+    def encoder_thread(self, task: EncodingTask):
+        work_done = False
+        try:
+            if self.is_working and not task.finished:
+                self.process_video(task)
+                work_done = True
+            return task
+        finally:
+            task.finished = True
+            task.status = STATUS_FINISHED
+            if work_done:
+                beep()
+            # self.task_finished(task)
 
-def encoder_thread(p: Processor, task: EncodingTask):
-    work_done = False
-    try:
-        if p.is_working and not task.finished:
-            p.process_video(task)
-            work_done = True
-        return task
-    finally:
-        task.finished = True
-        task.status = STATUS_FINISHED
-        if work_done:
-            beep()
+    # def task_finished(self, task: EncodingTask):
+    #     task.thread = None
 
 
 def progress_function(p: Processor, tasks: list[EncodingTask]):
@@ -297,9 +342,10 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
                 took2 = (t2 - task.time_started).total_seconds() \
                     if not task.finished \
                     else 0
-                p.console.print(f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:5.2f}x, {task.bit_rate_kilo:4d}k {task.fps:.2f}fps {task.video_src}')
+                p.console.print(
+                    f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:5.2f}x, {task.bit_rate_kilo:4d}k {task.fps:.2f}fps {task.video_src}')
         p.console.print(
-            f'[white]Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:5.2f}x, {num_tasks_remaining} remains | {defs.MAX_WORKERS}x{defs.THREADS}')
+            f'[white]Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:5.2f}x, {num_tasks_remaining} remains | {p.max_workers}x{defs.THREADS}')
         time.sleep(1.0)
 
 

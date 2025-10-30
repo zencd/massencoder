@@ -3,7 +3,7 @@ from pathlib import Path
 
 from process_them import EncodingTask
 
-MAX_WORKERS = 3
+MAX_WORKERS = 1
 THREADS = 4
 MOVE_INPUT_FILE = False
 try:
