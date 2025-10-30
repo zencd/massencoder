@@ -40,18 +40,21 @@ def print(s):
 
 class EncodingTask:
     def __init__(self, video_src: str):
+        # meta
         self.video_src = Path(video_src)
         self.video_len = 0
-        self.seconds_processed = 0
-        self.finished = False
-        self.status = STATUS_AWAITING
-        self.time_started = datetime.datetime.now()
         self.resolution = ''
         self.format = dict()
         self.videos = []
         self.audios = []
         self.bit_rate_kilo = 0
         self.fps = 0.0
+        # progress
+        self.finished = False
+        self.status = STATUS_AWAITING
+        self.time_started = datetime.datetime.now()
+        self.seconds_processed = 0
+        self.thread: typing.Optional[threading.Thread] = None
 
     def __str__(self):
         return f'EncodingTask({self.video_src}, finished={self.finished})'
@@ -157,63 +160,64 @@ class Processor:
     def mark_as_stopping(self):
         self.is_working = False
 
+    def load_tasks(self):
+        file_is_ok_to_process = lambda fn: (fn not in self.success.lines) and \
+                                           (fn not in self.errors.lines) and \
+                                           os.path.exists(fn) and \
+                                           os.path.isfile(fn)
+        files_to_process = [fn for fn in self.que.lines if file_is_ok_to_process(fn)]
+        files_to_process = list(dict.fromkeys(files_to_process))  # del duplicates
+        tasks: list[EncodingTask] = list(map(self.path_to_task, files_to_process))
+        return list(filter(self.filter_videos, tasks))
+
+    def path_to_task(self, f: str):
+        format_, videos, audios = get_video_meta(Path(f))
+        task = EncodingTask(f)
+        task.format = format_
+        task.videos = videos
+        task.audios = audios
+        task.video_len = float(format_['duration'])
+        task.bit_rate_kilo = int(format_['bit_rate']) // 1000
+        task.fps = calc_fps(videos[0])
+        return task
+
+    def filter_videos(self, task: EncodingTask):
+        video_src = task.video_src
+        videos, audios = task.videos, task.audios
+        if len(videos) != 1:
+            log(f'ERROR: Abnormal number of video streams: {len(videos)} in {video_src}')
+            return False
+        if videos[0]['codec_name'] in {'hevc', 'vp9'}:
+            log(f'ERROR: Video is H265 already: {video_src}')
+            return False
+
+        video_dst = self.resolve_target_video_path(video_src, defs.OUT_DIR)
+        if video_dst.exists():
+            log(f'ERROR: Destination file already exists: {video_dst}')
+            return False
+        create_dirs_for_file(video_dst)
+        # if not is_same_disk(video_src, video_dst.parent):
+        #     raise Exception(f'Files {video_src} and {video_dst} belongs to different volumes')
+        return True
+
     def start_impl(self):
-        def path_to_task(f: str):
-            format_, videos, audios = get_video_meta(Path(f))
-            task = EncodingTask(f)
-            task.format = format_
-            task.videos = videos
-            task.audios = audios
-            task.video_len = float(format_['duration'])
-            task.bit_rate_kilo = int(format_['bit_rate']) // 1000
-            task.fps = calc_fps(videos[0])
-            return task
-
-        def filter_videos(task: EncodingTask):
-            video_src = task.video_src
-            videos, audios = task.videos, task.audios
-            if len(videos) != 1:
-                log(f'ERROR: Abnormal number of video streams: {len(videos)} in {video_src}')
-                return False
-            if videos[0]['codec_name'] in {'hevc', 'vp9'}:
-                log(f'ERROR: Video is H265 already: {video_src}')
-                return False
-
-            video_dst = self.resolve_target_video_path(video_src, defs.OUT_DIR)
-            if video_dst.exists():
-                log(f'ERROR: Destination file already exists: {video_dst}')
-                return False
-            create_dirs_for_file(video_dst)
-            # if not is_same_disk(video_src, video_dst.parent):
-            #     raise Exception(f'Files {video_src} and {video_dst} belongs to different volumes')
-            return True
-
         defs = self.defs
         with ThreadPoolExecutor(max_workers=defs.MAX_WORKERS) as executor:
             self.executor = executor
             while True:
                 self.is_working = True
                 self.que.reload()
-                file_is_ok_to_process = lambda fn: (fn not in self.success.lines) and \
-                                                   (fn not in self.errors.lines) and \
-                                                   os.path.exists(fn) and \
-                                                   os.path.isfile(fn)
-                files_to_process = [fn for fn in self.que.lines if file_is_ok_to_process(fn)]
-                files_to_process = list(dict.fromkeys(files_to_process))  # del duplicates
-                tasks: list[EncodingTask] = list(map(path_to_task, files_to_process))
-                tasks = list(filter(filter_videos, tasks))
+                tasks = self.load_tasks()
                 if not tasks:
                     log('The queue is all processed. Stopping.')
                     beep()
                     break
+                self.tasks = tasks
                 self.total_src_seconds = sum(t.video_len for t in tasks)
                 log(f'Total source duration: {dhms(self.total_src_seconds)}')
                 self.time_started = datetime.datetime.now()
-                # self.ui.start()
                 futures = []
                 for task in tasks:
-                    self.tasks.append(task)
-                    # self.ui.add_task(task)
                     futures.append(executor.submit(encoder_thread, self, task))
                 progress_thread = threading.Thread(target=progress_function, args=[self, tasks], daemon=True)
                 progress_thread.start()
