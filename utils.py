@@ -14,7 +14,7 @@ def getch():
     try:
         # Windows
         import msvcrt
-        return msvcrt.getch().decode()
+        return msvcrt.getch().decode(errors='ignore') # 'ignore' because UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe0 in position 0: unexpected end of data
     except ImportError:
         import tty
         import termios

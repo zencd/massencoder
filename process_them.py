@@ -37,7 +37,8 @@ RESOLUTION_ERROR = 'Error'
 
 
 def print(s):
-    raise Exception('Do not print to console')
+    log('Do not print to console! Use `log` instead.')
+    sys.stdout.write(f'{s}\n')
 
 
 class EncodingTask:
@@ -259,8 +260,7 @@ class Processor:
         wait_thread.start()
 
         while self.is_working:
-            time.sleep(0.5)
-            ch = getch() # todo does it overload cpu?
+            ch = getch()  # XXX an experiment showed, it doesn't eat CPU without `sleep`
             log(f'getch: {ch}')
             if ch == 'q':
                 log('User chose to quit')
@@ -278,8 +278,6 @@ class Processor:
                 log('User chose to increase')
                 self.max_workers += 1
                 self.try_start_new_tasks()
-
-        # self.mark_as_stopping()
 
         log('Joining the wait_thread')
         wait_thread.join()
