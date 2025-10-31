@@ -172,10 +172,18 @@ class Processor:
         files_to_process = [fn for fn in self.que.lines if file_is_ok_to_process(fn)]
         files_to_process = list(dict.fromkeys(files_to_process))  # del duplicates
         tasks: list[EncodingTask] = list(map(self.path_to_task, files_to_process))
+        tasks = list(filter(bool, tasks))
         return list(filter(self.filter_videos, tasks))
 
     def path_to_task(self, f: str):
         format_, videos, audios = get_video_meta(Path(f))
+        if not videos:
+            log(f'Missing video streams: {f}')
+            return None
+        codec_name = videos[0]['codec_name']
+        if codec_name == 'mjpeg':
+            log(f'Unsupported video codec: {codec_name}')
+            return None
         task = EncodingTask(f)
         task.format = format_
         task.videos = videos

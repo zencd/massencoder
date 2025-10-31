@@ -19,7 +19,7 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
         num_tasks_remaining = sum(1 for t in tasks if not t.finished)
 
         tasks_current = [t for t in tasks if t.status == STATUS_RUNNING]
-        tasks_finished = [t for t in tasks if t.status == STATUS_FINISHED][0:5]
+        tasks_finished = [t for t in tasks if t.status == STATUS_FINISHED][0:1]
 
         p.console.clear()
         # clear_scrollback()
@@ -32,13 +32,14 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
                 took2 = (t2 - task.time_started).total_seconds() \
                     if not task.finished \
                     else 0
-                p.console.print(
-                    f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:5.2f}x, {task.bit_rate_kilo:4d}k {task.fps:.2f}fps {task.video_src}')
-        msg = f'[white]Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:5.2f}x, {num_tasks_remaining} remains | {p.max_workers}x{defs.THREADS}'
+                msg = f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)} {speed2:5.2f}x {task.bit_rate_kilo:4d}k {task.fps:.2f}fps {task.video_src}'
+                p.console.print(msg)
+        msg = f'[white]Total: {percent1:.3f}% ETA {hms(eta1)} {speed1:5.2f}x | {num_tasks_remaining} remains | {p.max_workers}x{defs.THREADS}'
         msg = f'{msg} | stopping softly' if p.stopping_softly else msg
         msg = f'{msg} | not working' if not p.is_working else msg
+        msg = f'{msg}'
         p.console.print(msg)
-        time.sleep(1.0)
+        time.sleep(0.5)
     log('progress_function finished')
 
 
