@@ -52,12 +52,15 @@ class EncodingTask:
         self.audios = []
         self.bit_rate_kilo = 0
         self.fps = 0.0
+        self.pixels_per_frame = 0 # like 1920 * 1080
         # progress
         self.finished = False
         self.status = STATUS_AWAITING
         self.time_started = datetime.datetime.now()
         self.seconds_processed = 0
         self.thread: typing.Optional[threading.Thread] = None
+        self.pixels_total = 0
+        self.pixels_processed = 0
 
     def __str__(self):
         return f'EncodingTask({self.video_src}, finished={self.finished})'
@@ -81,7 +84,7 @@ class Processor:
         self.is_working = False
         self.time_started = datetime.datetime.now()
         self.recent_task: typing.Optional['EncodingTask'] = None
-        self.total_src_seconds = 0
+        self.total_src_seconds = 0  # todo del?
         self.defs = defs
         self.que = PersistentList('list-que.txt')
         self.success = PersistentList('list-success.txt')
@@ -184,13 +187,18 @@ class Processor:
         if codec_name == 'mjpeg':
             log(f'Unsupported video codec: {codec_name}')
             return None
+        fps = calc_fps(videos[0])
+        video_len = float(format_['duration'])
+        pixels_per_frame = videos[0]['width'] * videos[0]['height']
         task = EncodingTask(f)
         task.format = format_
         task.videos = videos
         task.audios = audios
-        task.video_len = float(format_['duration'])
+        task.video_len = video_len
         task.bit_rate_kilo = int(format_['bit_rate']) // 1000
-        task.fps = calc_fps(videos[0])
+        task.fps = fps
+        task.pixels_per_frame = pixels_per_frame
+        task.pixels_total = pixels_per_frame * fps * video_len
         return task
 
     def filter_videos(self, task: EncodingTask):

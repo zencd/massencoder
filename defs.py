@@ -22,6 +22,8 @@ PARAM_MAKER = 'ffmpeg_265_copy'
 GOP_SIZE_SECONDS = 2
 DO_VERIFY = False
 
+DIV = 1
+
 # `-map 0` -- otherwise ffmpeg will skip alternate audio tracks: 2nd one and others
 # `-map_metadata -1` -- ffmpeg copies metadata from input file, which results in misleading tags like: BPS, NUMBER_OF_BYTES, DURATION...
 

@@ -94,7 +94,7 @@ def dhms(seconds: Union[int, float]) -> str:
     return (f'{days}d ' if days else '') + hms(rem)
 
 
-def calc_progress(amount_processed: int, total_amount: int, elapsed: datetime.timedelta):
+def calc_progress(amount_processed: float, total_amount: float, elapsed: datetime.timedelta):
     if total_amount:
         percent = amount_processed / total_amount * 100.0
         elapsed = elapsed.total_seconds()
