@@ -3,30 +3,42 @@ import platform
 import re
 import sys
 import datetime
+import time
 from pathlib import Path
 from typing import Union
 import threading
 
 import sys
+import platform
+
+if platform.system() == 'Windows':
+    import msvcrt
 
 
-def getch():
-    try:
-        # Windows
-        import msvcrt
-        return msvcrt.getch().decode(errors='ignore') # 'ignore' because UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe0 in position 0: unexpected end of data
-    except ImportError:
-        import tty
-        import termios
-        # Unix
+    def getch():
+        if msvcrt.kbhit():
+            return msvcrt.getch().decode(
+                errors='ignore')  # 'ignore' because UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe0 in position 0: unexpected end of data
+        else:
+            time.sleep(0.5)
+            return ''
+else:
+    import tty
+    import termios, select
+
+
+    def getch(timeout=0.5):
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
         try:
             tty.setraw(fd)
-            ch = sys.stdin.read(1)
+            r, _, _ = select.select([sys.stdin], [], [], timeout)
+            if r:
+                return sys.stdin.read(1)
+            else:
+                return ''
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        return ch
 
 
 def join_all(threads: list[threading.Thread]):
@@ -124,4 +136,6 @@ class PersistentList:
 
 
 if __name__ == '__main__':
-    beep()
+    ch = getch()
+    print(f'ch: [{ch}]')
+    print(f'ch: {type(ch)}')
