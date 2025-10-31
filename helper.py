@@ -4,13 +4,11 @@ import subprocess
 from pathlib import Path
 
 
-def print(s):
-    raise Exception('Do not print to console')
-
-
-def log(s):
+def log(s, do_print=False):
     with open('log.txt', 'a', encoding='utf-8') as f:
         f.write(f'{s}\n')
+    if do_print:
+        print(s)
 
 
 def log_clear():

@@ -241,11 +241,13 @@ class Processor:
             self.try_enqueue_task(task)
 
     def start_impl(self):
+        import ui_rich
         self.is_working = True
         self.que.reload()
+        log('Collecting tasks...', do_print=True)
         tasks = self.load_tasks()
         if not tasks:
-            log('The queue is all processed. Stopping.')
+            log('The queue is all processed. Stopping.', do_print=True)
             beep()
             return
         self.tasks: list[EncodingTask] = tasks
@@ -253,7 +255,7 @@ class Processor:
         log(f'Total source duration: {dhms(self.total_src_seconds)}')
         self.time_started = datetime.datetime.now()
         self.try_start_new_tasks()
-        progress_thread = threading.Thread(target=progress_function, args=[self, tasks], daemon=True)
+        progress_thread = threading.Thread(target=ui_rich.progress_function, args=[self, tasks], daemon=True)
         progress_thread.start()
 
         wait_thread = threading.Thread(target=self.wait_for_all_threads, args=[], daemon=False)
@@ -292,10 +294,10 @@ class Processor:
             with keep.running():
                 t1 = datetime.datetime.now()
                 log_clear()
-                log(f'Program started {t1}')
+                log(f'Program started {t1}', do_print=True)
                 self.start_impl()
                 t2 = datetime.datetime.now()
-                log(f'Total processing time: {t2 - t1}, now {datetime.datetime.now()}')
+                log(f'Total processing time: {t2 - t1}, now {datetime.datetime.now()}', do_print=True)
         except KeyboardInterrupt:
             self.mark_as_stopping()
             log(datetime.datetime.now())
@@ -318,60 +320,6 @@ class Processor:
             task.status = STATUS_FINISHED
             if work_done:
                 beep()
-            # self.task_finished(task)
-
-    # def task_finished(self, task: EncodingTask):
-    #     task.thread = None
-
-
-def progress_function(p: Processor, tasks: list[EncodingTask]):
-    defs = p.defs
-    t1 = datetime.datetime.now()
-    while p.is_working:
-        t2 = datetime.datetime.now()
-        total_processed = sum(t.seconds_processed for t in tasks)
-        percent1, eta1, speed1 = calc_progress(total_processed, p.total_src_seconds, t2 - t1)
-        num_tasks_remaining = sum(1 for t in tasks if not t.finished)
-
-        # msg = f'\rTotal: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:.2f}x, {num_tasks_remaining} tasks | Last: {hms(took2)} → {hms(eta2)}, {speed2:.2f}x | {defs.MAX_WORKERS}x{defs.THREADS}'
-        # sys.stdout.write(msg)
-
-        tasks_current = [t for t in tasks if t.status == STATUS_RUNNING]
-        tasks_finished = [t for t in tasks if t.status == STATUS_FINISHED][0:5]
-
-        p.console.clear()
-        # clear_scrollback()
-        for task_group in [tasks_current, tasks_finished]:
-            for task in task_group:
-                status, color = task_color(task)
-                percent2, eta2, speed2 = calc_progress(task.seconds_processed, task.video_len, t2 - task.time_started) \
-                    if not task.finished \
-                    else (0, 0, 0)
-                took2 = (t2 - task.time_started).total_seconds() \
-                    if not task.finished \
-                    else 0
-                p.console.print(
-                    f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)}, {speed2:5.2f}x, {task.bit_rate_kilo:4d}k {task.fps:.2f}fps {task.video_src}')
-        msg = f'[white]Total: {percent1:.3f}%, ETA {hms(eta1)}, {speed1:5.2f}x, {num_tasks_remaining} remains | {p.max_workers}x{defs.THREADS}'
-        msg = f'{msg} | stopping softly' if p.stopping_softly else msg
-        msg = f'{msg} | not working' if not p.is_working else msg
-        p.console.print(msg)
-        time.sleep(1.0)
-    log('progress_function finished')
-
-
-def task_color(task: EncodingTask):
-    if task.resolution == RESOLUTION_SUCCESS:
-        return 'OK', 'dark_sea_green4'
-    elif task.resolution == RESOLUTION_ERROR:
-        return 'ERROR', 'bright_red'
-    else:
-        if task.status == STATUS_RUNNING:
-            return task.status, 'turquoise2'
-        elif task.status == STATUS_AWAITING:
-            return task.status, 'bright_black'
-        else:
-            return task.status, 'bright_yellow'
 
 
 if __name__ == '__main__':
