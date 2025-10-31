@@ -278,8 +278,7 @@ class Processor:
         wait_thread.start()
 
         while self.is_working:
-            ch = getch()  # XXX an experiment showed, it doesn't eat CPU without `sleep`
-            log(f'getch: {ch}')
+            ch, need_sleep = getch()
             if ch == 'q':
                 log('User chose to quit')
                 self.mark_as_stopping()
@@ -296,6 +295,10 @@ class Processor:
                 log('User chose to increase')
                 self.max_workers += 1
                 self.try_start_new_tasks()
+
+            if need_sleep:
+                # preventing CPU exhaustion
+                time.sleep(0.2)
 
         log('Joining the wait_thread')
         wait_thread.join()
