@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 
 import process_them
-from helper import log
+from helper import log, get_video_meta
 
 
 def print(s):
@@ -59,6 +59,19 @@ def replace_in_list(lst: list, src: str, dst: str):
     return [(dst if s == src else s) for s in lst]
 
 
+def verify_fast(src: Path, dst: Path):
+    format1, videos1, audios1 = get_video_meta(src)
+    format2, videos2, audios2 = get_video_meta(dst)
+    dur1 = float(format1['duration'])
+    dur2 = float(format2['duration'])
+    diff = abs(dur1 - dur2)
+    if diff > 0.2:
+        log(f'ERROR duration differs: 1) {dur1}s {src}')
+        log(f'ERROR duration differs: 2) {dur2}s {dst}')
+        return False
+    return True
+
+
 def verify_via_decoding_ffmpeg(f: Path):
     # -skip_frame nokey -- very fast, 7:25:00/minute, but it checks keyframes only
     # full check takes 1:25:00/minute
@@ -100,7 +113,8 @@ if __name__ == '__main__':
     # verify_via_decoding()
     # verify_via_decoding(Path('D:/vikorzu-d/reenc-done-output/1ы.mkv'))
     t1 = datetime.datetime.now()
-    verify_via_decoding_ffmpeg(Path('D:/vikorzu-d/reenc-done-output/В главных ролях： Юра Борисов  [795374dd-5690-45aa-bf80-768f3cffaafe].mkv'))
+    verify_via_decoding_ffmpeg(
+        Path('D:/vikorzu-d/reenc-done-output/В главных ролях： Юра Борисов  [795374dd-5690-45aa-bf80-768f3cffaafe].mkv'))
     # verify_via_decoding_ffmpeg(Path('D:/vikorzu-d/reenc-done-output/Чужой Земля 6.mkv'))
     t2 = datetime.datetime.now()
     log(f'took: {t2 - t1}')

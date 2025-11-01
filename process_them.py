@@ -138,13 +138,19 @@ class Processor:
         out_tmp_file = self.resolve_target_video_path(video_src, defs.TMP_OUT_DIR)
         create_dirs_for_file(out_tmp_file)
         rc = self.call_ffmpeg(video_src, out_tmp_file, task)
+        log(f'ffmpeg finished with rc: {rc} - {task}')
         if rc == 0:
-            log(f'Ffmpeg finished - verifying it: {out_tmp_file}')
-            if defs.DO_VERIFY and not verify.verify_via_decoding_ffmpeg(out_tmp_file):
-                log(f'ERROR: Video verification failed: {out_tmp_file}')
+            log(f'ffmpeg finished - verifying it: {out_tmp_file}')
+            if not verify.verify_fast(video_src, out_tmp_file):
+                log(f'ERROR: verify_fast failed: {out_tmp_file}')
                 self.errors.add(str(video_src))
                 task.set_error()
-                # return
+                return
+            if defs.DO_VERIFY and not verify.verify_via_decoding_ffmpeg(out_tmp_file):
+                log(f'ERROR: verify_via_decoding_ffmpeg failed: {out_tmp_file}')
+                self.errors.add(str(video_src))
+                task.set_error()
+                return
             log(f'Video verified successfully: {out_tmp_file}')
             create_dirs_for_file(out_moved_file)
             log(f'Move {out_tmp_file} => {out_moved_file})')
@@ -234,10 +240,11 @@ class Processor:
             log(f'Task started immediately: {task}')
 
     def wait_for_all_threads(self):
+        log('wait_for_all_threads started')
         while self.is_working:
             threads = [task.thread for task in self.tasks if task.thread and task.thread.is_alive()]
             if threads:
-                log('Waiting for all threads')
+                # log('Waiting for all threads')
                 for t in threads:
                     t.join(1.0)
                     if not t.is_alive():

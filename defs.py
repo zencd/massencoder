@@ -24,6 +24,11 @@ DO_VERIFY = False
 
 DIV = 1
 
+BUTTONS = {
+    'q': 'Quit',
+    'stop': 'Stop',
+}
+
 # `-map 0` -- otherwise ffmpeg will skip alternate audio tracks: 2nd one and others
 # `-map_metadata -1` -- ffmpeg copies metadata from input file, which results in misleading tags like: BPS, NUMBER_OF_BYTES, DURATION...
 
@@ -38,7 +43,7 @@ def video_flags_265(task: 'EncodingTask'):
         threads_opt = f'-threads {THREADS}'
 
     x265_params_opt = f'-x265-params ' + ':'.join(x265_params) if x265_params else ''
-    video = f'{threads_opt} -map 0 -map_metadata -1 -c:v {encoder} {x265_params_opt} -crf 26 -preset medium -pix_fmt yuv420p'
+    video = f'{threads_opt} -map 0 -map_metadata -1 -c:v {encoder} {x265_params_opt} -crf 26 -preset medium -pix_fmt yuv420p -c:s copy'
     container = '-avoid_negative_ts 1 -reset_timestamps 1'
 
     # verification

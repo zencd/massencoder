@@ -45,6 +45,7 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
         msg = f'{msg} | not working' if not p.is_working else msg
         msg = f'{msg}'
         p.console.print(msg)
+        p.console.print('[yellow]Q[/]uit now  [yellow]S[/]top softly')
         time.sleep(1.0)
     log('progress_function finished')
 
