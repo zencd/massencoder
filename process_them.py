@@ -17,6 +17,7 @@ from wakepy.modes import keep
 
 import defs
 import gui
+import utils
 import verify
 from helper import get_video_meta, log, calc_fps, log_clear
 
@@ -146,19 +147,27 @@ class Processor:
                 self.errors.add(str(video_src))
                 task.set_error()
                 return
-            if defs.DO_VERIFY and not verify.verify_via_decoding_ffmpeg(out_tmp_file):
+            if defs.DO_VERIFY_SLOW and not verify.verify_via_decoding_ffmpeg(out_tmp_file):
                 log(f'ERROR: verify_via_decoding_ffmpeg failed: {out_tmp_file}')
                 self.errors.add(str(video_src))
                 task.set_error()
                 return
             log(f'Video verified successfully: {out_tmp_file}')
             create_dirs_for_file(out_moved_file)
-            log(f'Move {out_tmp_file} => {out_moved_file})')
-            shutil.move(out_tmp_file, out_moved_file)
-            if defs.MOVE_INPUT_FILE:
-                log(f'Move {video_src} => {src_moved_file}')
-                create_dirs_for_file(src_moved_file)
-                shutil.move(video_src, src_moved_file)
+            if defs.FILE_STRATEGY == defs.FILE_STRATEGY_ONE_FLAT_FOLDER:
+                # log(f'Move {out_tmp_file} => {out_moved_file})')
+                utils.move_file(out_tmp_file, out_moved_file)
+                if defs.MOVE_INPUT_FILE:
+                    # log(f'Move {video_src} => {src_moved_file}')
+                    # create_dirs_for_file(src_moved_file)
+                    utils.move_file(video_src, src_moved_file)
+            elif defs.FILE_STRATEGY == defs.FILE_STRATEGY_REPLACE_SOURCE:
+                src_moved_file = video_src.parent / (video_src.stem + '_OLD' + video_src.suffix)
+                utils.move_file(video_src, src_moved_file)
+                utils.move_file(out_tmp_file, video_src.parent / out_moved_file.name)
+                utils.remove_file(src_moved_file)
+            else:
+                assert False, 'Unknown FILE_STRATEGY'
             self.success.add(str(video_src))
             task.set_success()
         elif rc == 255:

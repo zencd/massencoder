@@ -1,3 +1,4 @@
+import shutil
 import os
 import platform
 import re
@@ -38,6 +39,19 @@ else:
                 return '', False
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
+def move_file(src: Path, dest: Path):
+    from helper import log
+    create_dirs_for_file(dest)
+    log(f'Move {src} => {dest})')
+    shutil.move(src, dest)
+
+
+def remove_file(src: Path):
+    from helper import log
+    log(f'Remove {src}')
+    src.unlink(missing_ok=True)
 
 
 def join_all(threads: list[threading.Thread]):
