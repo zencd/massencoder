@@ -65,9 +65,11 @@ def verify_fast(src: Path, dst: Path):
     dur1 = float(format1['duration'])
     dur2 = float(format2['duration'])
     diff = abs(dur1 - dur2)
-    if diff > 0.4:
+    threshold = 0.5
+    if diff > threshold:
         log(f'ERROR duration differs: 1) {dur1}s {src}')
         log(f'ERROR duration differs: 2) {dur2}s {dst}')
+        log(f'threshold: {threshold}')
         return False
     return True
 

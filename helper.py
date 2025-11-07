@@ -2,7 +2,7 @@ import json
 
 import subprocess
 from pathlib import Path
-
+import shlex
 
 def log(s, do_print=False):
     with open('log.txt', 'a', encoding='utf-8') as f:
@@ -18,8 +18,9 @@ def log_clear():
 
 def get_video_meta(video: Path):
     args = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', str(video)]
+    # log(f'Exec: {shlex.join(args)}')
     res = subprocess.run(args, stdout=subprocess.PIPE)
-    assert res.returncode == 0
+    assert res.returncode == 0, f'Ffprobe failed for: {video}'
     text = res.stdout.decode('utf-8')
     j = json.loads(text)
     f = j['format']

@@ -277,6 +277,7 @@ class Processor:
         import ui_rich
         self.is_working = True
         self.que.reload()
+        log(f'Input lines: {len(self.que.lines)}', do_print=True)
         log('Collecting tasks...', do_print=True)
         tasks = self.load_tasks()
         if not tasks:
@@ -294,6 +295,17 @@ class Processor:
         wait_thread = threading.Thread(target=self.wait_for_all_threads, args=[], daemon=False)
         wait_thread.start()
 
+        self.read_user_input()
+
+        log('Joining the wait_thread')
+        wait_thread.join()
+        log('Joined the wait_thread')
+
+        log('Joining the progress thread')
+        progress_thread.join()
+        log('Joined the progress thread')
+
+    def read_user_input(self):
         while self.is_working:
             ch, need_sleep = getch()
             if ch == 'q':
@@ -315,15 +327,7 @@ class Processor:
 
             if need_sleep:
                 # preventing CPU exhaustion
-                time.sleep(0.2)
-
-        log('Joining the wait_thread')
-        wait_thread.join()
-        log('Joined the wait_thread')
-
-        log('Joining the progress thread')
-        progress_thread.join()
-        log('Joined the progress thread')
+                time.sleep(0.05)
 
     def start(self):
         try:
@@ -338,11 +342,15 @@ class Processor:
             self.mark_as_stopping()
             log(datetime.datetime.now())
             log('Bye!')
-        except Exception:
-            traceback.print_exc()
+        except Exception as e:
+            # todo add trace to log
+            log(f'EXCEPTION: {e}, {type(e)}', do_print=True)
+            for line in traceback.format_tb(e.__traceback__):
+                log(line.rstrip(), do_print=True)
+            # traceback.print_exc()
             self.mark_as_stopping()
-            log(datetime.datetime.now())
-            log('Bye!')
+            log(datetime.datetime.now(), do_print=True)
+            log('Bye!', do_print=True)
 
     def encoder_thread(self, task: EncodingTask):
         work_done = False

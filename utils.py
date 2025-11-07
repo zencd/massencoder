@@ -18,7 +18,7 @@ if platform.system() == 'Windows':
 
     def getch():
         if msvcrt.kbhit():
-            # 'ignore' because UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe0 in position 0: unexpected end of data
+            # 'ignore/replace' because UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe0 in position 0: unexpected end of data
             return msvcrt.getch().decode(errors='replace'), False
         else:
             return '', True
