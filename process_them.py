@@ -187,6 +187,7 @@ class Processor:
                                            (fn not in self.errors.lines) and \
                                            os.path.exists(fn) and \
                                            os.path.isfile(fn) and \
+                                           os.path.getsize(fn) > 0 and \
                                            not os.path.basename(fn).startswith('._')
         files_to_process = [fn for fn in self.que.lines if file_is_ok_to_process(fn)]
         files_to_process = list(dict.fromkeys(files_to_process))  # del duplicates, preserving order

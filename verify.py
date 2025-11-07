@@ -1,8 +1,8 @@
 import datetime
+import os.path
 import subprocess
 from pathlib import Path
 
-import process_them
 from helper import log, get_video_meta
 
 
@@ -11,6 +11,7 @@ def print(s):
 
 
 def verify_bad_ext():
+    import process_them
     cnt = 0
     for f in process_them.BASE_DIR.rglob('*'):
         fstr = str(f)
@@ -27,6 +28,7 @@ def verify_bad_ext():
 
 
 def verify_missing_files():
+    import process_them
     names1 = set([f.stem for f in process_them.OUT_DIR.rglob('*')])
     names2 = set([f.stem for f in process_them.PROCESSED_INPUT_DIR.rglob('*')])
     diff = names1.difference(names2)
@@ -97,6 +99,7 @@ def verify_via_decoding_ffmpeg(f: Path):
 
 
 def verify_via_decoding():
+    import process_them
     okays, bads = 0, 0
     for f in process_them.PROCESSED_INPUT_DIR.rglob('*'):
         # print(f)
@@ -109,14 +112,17 @@ def verify_via_decoding():
     log(f'bads: {bads}')
 
 
-if __name__ == '__main__':
-    # verify_bad_ext()
-    # verify_missing_files()
-    # verify_via_decoding()
-    # verify_via_decoding(Path('D:/vikorzu-d/reenc-done-output/1ы.mkv'))
+def main():
+    from utils import PersistentList
     t1 = datetime.datetime.now()
-    verify_via_decoding_ffmpeg(
-        Path('D:/vikorzu-d/reenc-done-output/В главных ролях： Юра Борисов  [795374dd-5690-45aa-bf80-768f3cffaafe].mkv'))
-    # verify_via_decoding_ffmpeg(Path('D:/vikorzu-d/reenc-done-output/Чужой Земля 6.mkv'))
+    que = PersistentList('list-que.txt')
+    for line in que.lines:
+        if os.path.exists(line):
+            if not verify_via_decoding_ffmpeg(Path(line)):
+                pass
     t2 = datetime.datetime.now()
     log(f'took: {t2 - t1}')
+
+
+if __name__ == '__main__':
+    main()
