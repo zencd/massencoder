@@ -19,9 +19,9 @@ import verify
 from helper import get_video_meta, log, calc_fps, log_clear
 from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, getch
 
-# todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
-# todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
-# todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
+# todo removing `from ui_terminal import UiTerminal` leads to error: AttributeError: module 'rich' has no attribute 'console'
+# todo removing `from ui_terminal import UiTerminal` leads to error: AttributeError: module 'rich' has no attribute 'console'
+from ui_terminal import UiTerminal
 
 STATUS_AWAITING = 'Awaiting'
 STATUS_RUNNING = 'Running'
@@ -190,7 +190,7 @@ class Processor:
         return list(filter(self.filter_videos, tasks))
 
     def path_to_task(self, f: str):
-        format_, videos, audios = get_video_meta(Path(f))
+        fmt, videos, audios, subtitles, others = get_video_meta(Path(f))
         if not videos:
             log(f'Missing video streams: {f}')
             return None
@@ -199,14 +199,14 @@ class Processor:
             log(f'Unsupported video codec: {codec_name}')
             return None
         fps = calc_fps(videos[0])
-        video_len = float(format_['duration'])
+        video_len = float(fmt['duration'])
         pixels_per_frame = videos[0]['width'] * videos[0]['height']
         task = EncodingTask(f)
-        task.format = format_
+        task.format = fmt
         task.videos = videos
         task.audios = audios
         task.video_len = video_len
-        task.bit_rate_kilo = int(format_['bit_rate']) // 1000
+        task.bit_rate_kilo = int(fmt['bit_rate']) // 1000
         task.fps = fps
         task.pixels_per_frame = pixels_per_frame
         task.pixels_total = pixels_per_frame * fps * video_len

@@ -62,8 +62,8 @@ def replace_in_list(lst: list, src: str, dst: str):
 
 
 def verify_fast(src: Path, dst: Path):
-    format1, videos1, audios1 = get_video_meta(src)
-    format2, videos2, audios2 = get_video_meta(dst)
+    format1, videos1, audios1, subtitles1, others1 = get_video_meta(src)
+    format2, videos2, audios2, subtitles2, others2 = get_video_meta(dst)
     dur1 = float(format1['duration'])
     dur2 = float(format2['duration'])
     diff = abs(dur1 - dur2)
@@ -72,6 +72,18 @@ def verify_fast(src: Path, dst: Path):
         log(f'ERROR duration differs: 1) {dur1}s {src}')
         log(f'ERROR duration differs: 2) {dur2}s {dst}')
         log(f'threshold: {threshold}')
+        return False
+    if len(audios1) != len(audios2):
+        log(f'ERROR different number of audio streams: {len(audios1)} in {src}')
+        log(f'ERROR different number of audio streams: {len(audios2)} in {dst}')
+        return False
+    if len(videos1) != len(videos2):
+        log(f'ERROR different number of video streams: {len(videos1)} in {src}')
+        log(f'ERROR different number of video streams: {len(videos2)} in {dst}')
+        return False
+    if len(subtitles1) != len(subtitles2):
+        log(f'ERROR different number of subtitle streams: {len(subtitles1)} in {src}')
+        log(f'ERROR different number of subtitle streams: {len(subtitles2)} in {dst}')
         return False
     return True
 

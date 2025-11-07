@@ -45,10 +45,10 @@ def _main():
     que = PersistentList('list-que.txt')
     for f in que.lines:
         path = Path(f)
-        if not path.exists() or path.stem.startswith('._'):
+        if not path.exists() or path.stem.startswith('._') or path.stat().st_size == 0:
             continue
         fmt, videos, audios, subtitles, others = get_video_meta(path)
-        if subtitles or others:
+        if subtitles:
             print(f'{f}')
             for s in videos:
                 print(f'  VIDEO {s['index']}')

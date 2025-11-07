@@ -1,6 +1,7 @@
 import math
 from pathlib import Path
 
+import helper
 from process_them import EncodingTask
 
 MAX_WORKERS = 1
@@ -32,6 +33,18 @@ FILE_STRATEGY = FILE_STRATEGY_REPLACE_SOURCE
 # `-map_metadata -1` -- ffmpeg copies metadata from input file by default, which results in misleading tags like: BPS, NUMBER_OF_BYTES, DURATION...
 
 def video_flags_265(task: 'EncodingTask'):
+    def make_exclude_streams_options():
+        if TARGET_EXT == 'mkv':
+            # adding options like `-map -0:2` to exclude streams not supported by mkv
+            # mkv supports only: video, audio, subtitle
+            drop_list = []
+            fmt, videos, audios, subtitles, others = helper.get_video_meta(task.video_src)
+            for s in others:
+                drop_list.append('-map')
+                drop_list.append(f'-0:{s['index']}')
+            return ' '.join(drop_list)
+        return ''
+
     encoder = 'libx265'
     keyint = math.ceil(task.fps * GOP_SIZE_SECONDS)
 
@@ -41,8 +54,10 @@ def video_flags_265(task: 'EncodingTask'):
         x265_params.append(f'pools={THREADS}')
         threads_opt = f'-threads {THREADS}'
 
+
+    drop_streams = make_exclude_streams_options()
     x265_params_opt = f'-x265-params ' + ':'.join(x265_params) if x265_params else ''
-    video = f'{threads_opt} -map 0 -map_metadata -1 -c:v {encoder} {x265_params_opt} -crf 26 -preset medium -pix_fmt yuv420p -c:s copy'
+    video = f'{threads_opt} -map 0 {drop_streams} -map_metadata -1 -c:v {encoder} {x265_params_opt} -crf 26 -preset medium -pix_fmt yuv420p -c:s copy'
     container = '-avoid_negative_ts 1 -reset_timestamps 1'
 
     # verification
