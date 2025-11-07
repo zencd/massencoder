@@ -53,7 +53,7 @@ class EncodingTask:
         self.audios = []
         self.bit_rate_kilo = 0
         self.fps = 0.0
-        self.pixels_per_frame = 0 # like 1920 * 1080
+        self.pixels_per_frame = 0  # like 1920 * 1080
         # progress
         self.finished = False
         self.status = STATUS_AWAITING
@@ -186,9 +186,10 @@ class Processor:
         file_is_ok_to_process = lambda fn: (fn not in self.success.lines) and \
                                            (fn not in self.errors.lines) and \
                                            os.path.exists(fn) and \
-                                           os.path.isfile(fn)
+                                           os.path.isfile(fn) and \
+                                           not os.path.basename(fn).startswith('._')
         files_to_process = [fn for fn in self.que.lines if file_is_ok_to_process(fn)]
-        files_to_process = list(dict.fromkeys(files_to_process))  # del duplicates
+        files_to_process = list(dict.fromkeys(files_to_process))  # del duplicates, preserving order
         tasks: list[EncodingTask] = list(map(self.path_to_task, files_to_process))
         tasks = list(filter(bool, tasks))
         return list(filter(self.filter_videos, tasks))
