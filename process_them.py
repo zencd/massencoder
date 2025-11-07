@@ -2,32 +2,26 @@ import datetime
 import os.path
 import re
 import shlex
-import shutil
 import subprocess
 import sys
 import threading
 import time
 import traceback
 import typing
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import rich
 from wakepy.modes import keep
 
 import defs
-import gui
 import utils
 import verify
 from helper import get_video_meta, log, calc_fps, log_clear
+from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, getch
 
 # todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
 # todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
 # todo removing this leads to error: AttributeError: module 'rich' has no attribute 'console'
-from ui_terminal import UiTerminal
-
-from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, calc_progress, clear_scrollback, join_all, \
-    getch
 
 STATUS_AWAITING = 'Awaiting'
 STATUS_RUNNING = 'Running'
@@ -118,7 +112,7 @@ class Processor:
                         task.seconds_processed = time_processed
                 line_cnt += 1
             proc.wait(defs.WAIT_TIMEOUT)
-        return proc.returncode
+        return proc.returncode & 0xFF
 
     def resolve_target_video_path(self, video_src: Path, target_dir: Path):
         defs = self.defs
@@ -241,14 +235,19 @@ class Processor:
         return sum(1 for t in self.tasks if t.status == STATUS_RUNNING)
 
     def try_enqueue_task(self, task: EncodingTask):
+        '''
+        :return: true if enqueued the task
+        '''
         if not self.is_working or self.stopping_softly:
-            return
+            return False
         if self.num_running_tasks() < self.max_workers:
             t = threading.Thread(target=self.encoder_thread, args=[task], daemon=True)
             task.thread = t
             task.status = STATUS_RUNNING
             t.start()
             log(f'Task started immediately: {task}')
+            return True
+        return False
 
     def wait_for_all_threads(self):
         log('wait_for_all_threads started')
@@ -258,9 +257,7 @@ class Processor:
                 # log('Waiting for all threads')
                 for t in threads:
                     t.join(1.0)
-                    if not t.is_alive():
-                        # one thread finished
-                        self.try_start_new_tasks()
+                self.try_start_new_tasks()
             else:
                 log('no threads running, set is_working to false')
                 self.is_working = False
@@ -272,7 +269,8 @@ class Processor:
             return
         new_tasks = [task for task in self.tasks if task.status == STATUS_AWAITING]
         for task in new_tasks:
-            self.try_enqueue_task(task)
+            if not self.try_enqueue_task(task):
+                break
 
     def start_impl(self):
         import ui_rich

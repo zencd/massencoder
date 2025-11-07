@@ -20,7 +20,8 @@ def get_video_meta(video: Path):
     args = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', str(video)]
     # log(f'Exec: {shlex.join(args)}')
     res = subprocess.run(args, stdout=subprocess.PIPE)
-    assert res.returncode == 0, f'Ffprobe failed for: {video}'
+    rc = res.returncode & 0xFF
+    assert rc == 0, f'Ffprobe failed for: {video}'
     text = res.stdout.decode('utf-8')
     j = json.loads(text)
     f = j['format']
