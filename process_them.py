@@ -112,6 +112,9 @@ class Processor:
                         task.seconds_processed = time_processed
                 line_cnt += 1
             proc.wait(defs.WAIT_TIMEOUT)
+        if proc.returncode == 0 and not self.is_working:
+            log(f'call_ffmpeg: force return code 255 because not working anymore, was {proc.returncode}')
+            return 255
         return proc.returncode & 0xFF
 
     def resolve_target_video_path(self, video_src: Path, target_dir: Path):
