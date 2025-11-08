@@ -14,29 +14,18 @@ import platform
 
 if platform.system() == 'Windows':
     import msvcrt
-
-
     def getch():
-        if msvcrt.kbhit():
-            # 'ignore/replace' because UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe0 in position 0: unexpected end of data
-            return msvcrt.getch().decode(errors='replace'), False
-        else:
-            return '', True
+        # 'ignore/replace' because UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe0 in position 0: unexpected end of data
+        return msvcrt.getch().decode(errors='ignore')
 else:
     import tty
     import termios, select
-
-
-    def getch(timeout: float):
+    def getch():
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
         try:
             tty.setraw(fd)
-            r, _, _ = select.select([sys.stdin], [], [], timeout)
-            if r:
-                return sys.stdin.read(1), False
-            else:
-                return '', False
+            return sys.stdin.read(1)
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 

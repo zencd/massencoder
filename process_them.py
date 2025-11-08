@@ -288,13 +288,14 @@ class Processor:
         log(f'Total source duration: {dhms(self.total_src_seconds)}')
         self.time_started = datetime.datetime.now()
         self.try_start_new_tasks()
+
         progress_thread = threading.Thread(target=ui_rich.progress_function, args=[self, tasks], daemon=True)
         progress_thread.start()
 
         wait_thread = threading.Thread(target=self.wait_for_all_threads, args=[], daemon=False)
         wait_thread.start()
 
-        self.read_user_input()
+        threading.Thread(target=self.read_user_input, args=[], daemon=True).start()
 
         log('Joining the wait_thread')
         wait_thread.join()
@@ -306,7 +307,7 @@ class Processor:
 
     def read_user_input(self):
         while self.is_working:
-            ch, need_sleep = getch()
+            ch = getch()
             if ch == 'q':
                 log('User chose to quit')
                 self.mark_as_stopping()
@@ -323,10 +324,6 @@ class Processor:
                 log('User chose to increase')
                 self.max_workers += 1
                 self.try_start_new_tasks()
-
-            if need_sleep:
-                # preventing CPU exhaustion
-                time.sleep(0.05)
 
     def start(self):
         try:
