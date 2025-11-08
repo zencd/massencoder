@@ -307,23 +307,23 @@ class Processor:
 
     def read_user_input(self):
         while self.is_working:
-            ch = getch()
-            if ch == 'q':
-                log('User chose to quit')
-                self.mark_as_stopping()
-                break
-            elif ch == 's':
-                log('User chose to stop')
-                self.stopping_softly = True
-                break
-            elif ch == '-':
-                log('User chose to decrease')
-                if self.max_workers >= 2:
-                    self.max_workers -= 1
-            elif ch == '=':
-                log('User chose to increase')
-                self.max_workers += 1
-                self.try_start_new_tasks()
+            match getch():
+                case 'q':
+                    log('User chose to quit')
+                    self.mark_as_stopping()
+                    break
+                case 's':
+                    log('User chose to stop')
+                    self.stopping_softly = True
+                    break
+                case '-':
+                    log('User chose to decrease')
+                    if self.max_workers >= 2:
+                        self.max_workers -= 1
+                case '=':
+                    log('User chose to increase')
+                    self.max_workers += 1
+                    self.try_start_new_tasks()
 
     def start(self):
         try:
