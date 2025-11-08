@@ -28,6 +28,8 @@ FILE_STRATEGY_ONE_FLAT_FOLDER = 'FILE_STRATEGY_ONE_FLAT_FOLDER'
 FILE_STRATEGY_REPLACE_SOURCE = 'FILE_STRATEGY_REPLACE_SOURCE'
 FILE_STRATEGY = FILE_STRATEGY_REPLACE_SOURCE
 
+UI_REFRESH_PAUSE = 0.7
+
 
 # `-map 0` -- otherwise ffmpeg will skip alternate audio tracks: 2nd one and others
 # `-map_metadata -1` -- ffmpeg copies metadata from input file by default, which results in misleading tags like: BPS, NUMBER_OF_BYTES, DURATION...

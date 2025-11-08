@@ -1,4 +1,6 @@
 import datetime
+import math
+import statistics
 import time
 
 from helper import log
@@ -15,17 +17,10 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
     while p.is_working:
         t2 = datetime.datetime.now()
 
-        total_pixels_processed = sum(t.pixels_per_frame * t.fps * t.seconds_processed for t in tasks)
-        total_pixels = sum(t.pixels_total for t in tasks)
-        speed_divisor_avg = sum(t.pixels_per_frame * t.fps for t in tasks) / len(tasks)
-        percent1, eta1, speed1 = calc_progress(total_pixels_processed, total_pixels, t2 - t1)
-        speed1 = speed1 / speed_divisor_avg
-        num_tasks_remaining = sum(1 for t in tasks if not t.finished)
-
         tasks_current = [t for t in tasks if t.status == STATUS_RUNNING]
-        tasks_finished = [t for t in tasks if t.status == STATUS_FINISHED][0:1]
 
         p.console.clear()
+        speed_sum = 0.0
         for task_group in [tasks_current]:
             for task in task_group:
                 status, color = task_color(task)
@@ -39,14 +34,22 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
                     else 0
                 msg = f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)} {speed2:5.2f}x {task.bit_rate_kilo:4d}k {task.fps:.2f}fps {task.video_src}'
                 p.console.print(msg)
+                speed_sum += speed2
 
-        msg = f'[white]Total: {percent1:.3f}% ETA {hms(eta1)} {speed1:5.2f}x | {num_tasks_remaining} remains | {p.max_workers}x{defs.THREADS}'
+        total_pixels_processed = sum(t.pixels_per_frame * t.fps * t.seconds_processed for t in tasks)
+        total_pixels = sum(t.pixels_total for t in tasks)
+        # speed_divisor_avg = sum(t.pixels_per_frame * t.fps for t in tasks) / len(tasks)
+        percent1, eta1, speed1 = calc_progress(total_pixels_processed, total_pixels, t2 - t1)
+        # speed1 = speed1 / speed_divisor_avg
+        num_tasks_remaining = sum(1 for t in tasks if not t.finished)
+
+        msg = f'[white]Total: {percent1:.3f}% ETA {hms(eta1)} {speed_sum:5.2f}x | {num_tasks_remaining} remains | {p.max_workers}x{defs.THREADS}'
         msg = f'{msg} | stopping softly' if p.stopping_softly else msg
         msg = f'{msg} | not working' if not p.is_working else msg
         msg = f'{msg}'
         p.console.print(msg)
-        p.console.print('[yellow]Q[/]uit now  [yellow]S[/]top softly')
-        time.sleep(1.0)
+        p.console.print('[white on black] [yellow]Q[/]uit now [/] [white on black] [yellow]S[/]top softly [/]')
+        time.sleep(defs.UI_REFRESH_PAUSE)
     log('progress_function finished')
 
 
