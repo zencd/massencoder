@@ -19,11 +19,17 @@ def log_clear():
         f.write('')
 
 
+class BadVideoFile(Exception):
+    pass
+
+
 def get_video_meta(video: Path):
     args = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', str(video)]
     # log(f'Exec: {shlex.join(args)}')
     res = subprocess.run(args, stdout=subprocess.PIPE)
     rc = res.returncode & 0xFF
+    if rc != 0:
+        raise BadVideoFile(f'Ffprobe failed with {rc} for: {video}')
     assert rc == 0, f'Ffprobe failed with {rc} for: {video}'
     text = res.stdout.decode('utf-8')
     j = json.loads(text)

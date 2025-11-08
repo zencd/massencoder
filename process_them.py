@@ -16,7 +16,7 @@ from wakepy.modes import keep
 import defs
 import utils
 import verify
-from helper import get_video_meta, log, calc_fps, log_clear
+from helper import get_video_meta, log, calc_fps, log_clear, BadVideoFile
 from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, getch
 
 # todo removing `from ui_terminal import UiTerminal` leads to error: AttributeError: module 'rich' has no attribute 'console'
@@ -193,27 +193,31 @@ class Processor:
         return list(filter(self.filter_videos, tasks))
 
     def path_to_task(self, f: str):
-        fmt, videos, audios, subtitles, others = get_video_meta(Path(f))
-        if not videos:
-            log(f'Missing video streams: {f}')
+        try:
+            fmt, videos, audios, subtitles, others = get_video_meta(Path(f))
+            if not videos:
+                log(f'Missing video streams: {f}')
+                return None
+            codec_name = videos[0]['codec_name']
+            if codec_name == 'mjpeg':
+                log(f'Unsupported video codec: {codec_name}')
+                return None
+            fps = calc_fps(videos[0])
+            video_len = float(fmt['duration'])
+            pixels_per_frame = videos[0]['width'] * videos[0]['height']
+            task = EncodingTask(f)
+            task.format = fmt
+            task.videos = videos
+            task.audios = audios
+            task.video_len = video_len
+            task.bit_rate_kilo = int(fmt['bit_rate']) // 1000
+            task.fps = fps
+            task.pixels_per_frame = pixels_per_frame
+            task.pixels_total = pixels_per_frame * fps * video_len
+            return task
+        except BadVideoFile as e:
+            log(f'Bad video file: {e}')
             return None
-        codec_name = videos[0]['codec_name']
-        if codec_name == 'mjpeg':
-            log(f'Unsupported video codec: {codec_name}')
-            return None
-        fps = calc_fps(videos[0])
-        video_len = float(fmt['duration'])
-        pixels_per_frame = videos[0]['width'] * videos[0]['height']
-        task = EncodingTask(f)
-        task.format = fmt
-        task.videos = videos
-        task.audios = audios
-        task.video_len = video_len
-        task.bit_rate_kilo = int(fmt['bit_rate']) // 1000
-        task.fps = fps
-        task.pixels_per_frame = pixels_per_frame
-        task.pixels_total = pixels_per_frame * fps * video_len
-        return task
 
     def filter_videos(self, task: EncodingTask):
         video_src = task.video_src
