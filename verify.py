@@ -62,16 +62,28 @@ def replace_in_list(lst: list, src: str, dst: str):
 
 
 def verify_fast(src: Path, dst: Path):
+    dur_threshold = 1.5
+    size_threshold = 0.75
+    size1 = src.stat().st_size
+    size2 = dst.stat().st_size
+    if size2 > size1:
+        log(f'ERROR: file got bigger: 1) {size1//1024//1024} MB {src}')
+        log(f'ERROR: file got bigger: 2) {size2//1024//1024} MB {dst}')
+        return False
+    if size2 / size1 > size_threshold:
+        log(f'ERROR: file got just slightly lighter: 1) {size1//1024//1024} MB {src}')
+        log(f'ERROR: file got just slightly lighter: 2) {size2//1024//1024} MB {dst}')
+        log(f'threshold: {size_threshold}')
+        return False
     format1, videos1, audios1, subtitles1, others1 = get_video_meta(src)
     format2, videos2, audios2, subtitles2, others2 = get_video_meta(dst)
     dur1 = float(format1['duration'])
     dur2 = float(format2['duration'])
     diff = abs(dur1 - dur2)
-    threshold = 1.5
-    if diff > threshold:
+    if diff > dur_threshold:
         log(f'ERROR duration differs: 1) {dur1}s {src}')
         log(f'ERROR duration differs: 2) {dur2}s {dst}')
-        log(f'threshold: {threshold}')
+        log(f'threshold: {dur_threshold}')
         return False
     if len(audios1) != len(audios2):
         log(f'ERROR different number of audio streams: {len(audios1)} in {src}')

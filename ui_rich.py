@@ -48,7 +48,18 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
         msg = f'{msg} | not working' if not p.is_working else msg
         msg = f'{msg}'
         p.console.print(msg)
+
+        # alternate ETA - via video time
+        # sec_processed = sum(t.seconds_processed for t in tasks)
+        # if sec_processed > 0:
+        #     passed = int((t2 - t1).total_seconds())
+        #     sec_total = int(sum(t.video_len for t in tasks))
+        #     eta = int(passed * sec_total / sec_processed - passed)
+        #     msg = f'[white]{passed} * {sec_total} / {sec_processed} - {passed} = {eta} = {hms(eta)}'
+        #     p.console.print(msg)
+
         p.console.print('[white on black] [yellow]Q[/]uit now [/] [white on black] [yellow]S[/]top softly [/]')
+
         time.sleep(defs.UI_REFRESH_PAUSE)
     log('progress_function finished')
 
