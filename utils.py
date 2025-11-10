@@ -14,12 +14,20 @@ import platform
 
 if platform.system() == 'Windows':
     import msvcrt
+    def ensure_terminal():
+        pass
     def getch():
         # 'ignore/replace' because UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe0 in position 0: unexpected end of data
         return msvcrt.getch().decode(errors='ignore')
 else:
     import tty
-    import termios, select
+    import termios
+    def ensure_terminal():
+        try:
+            termios.tcgetattr(sys.stdin.fileno())
+        except termios.error:
+            print('Enable terminal emulation in IDE to continue')
+            sys.exit(1)
     def getch():
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)

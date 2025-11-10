@@ -372,4 +372,5 @@ class Processor:
 
 
 if __name__ == '__main__':
+    utils.ensure_terminal()
     Processor().start()
