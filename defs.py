@@ -59,6 +59,7 @@ def video_flags_265(task: 'EncodingTask'):
 
     drop_streams = make_exclude_streams_options()
     x265_params_opt = f'-x265-params ' + ':'.join(x265_params) if x265_params else ''
+    # use `-c:s srt` to convert all subtitles to SRT (mkv doesn't support some formats)
     video = f'{threads_opt} -map 0 {drop_streams} -map_metadata -1 -c:v {encoder} {x265_params_opt} -crf 26 -preset medium -pix_fmt yuv420p -c:s copy'
     container = '-avoid_negative_ts 1 -reset_timestamps 1'
 

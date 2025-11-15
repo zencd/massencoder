@@ -202,9 +202,12 @@ class Processor:
                 return None
             codec_name = videos[0]['codec_name']
             if codec_name == 'mjpeg':
-                log(f'Unsupported video codec: {codec_name}')
+                log(f'Unsupported video codec {codec_name} in {f}')
                 return None
             fps = calc_fps(videos[0])
+            if 'duration' not in fmt:
+                log(f'Unrecognized video file: {f}')
+                return None
             video_len = float(fmt['duration'])
             pixels_per_frame = videos[0]['width'] * videos[0]['height']
             task = EncodingTask(f)
@@ -224,6 +227,12 @@ class Processor:
     def filter_videos(self, task: EncodingTask):
         video_src = task.video_src
         videos, audios = task.videos, task.audios
+
+        tags = task.format.get('tags') or dict()
+        if tags.get('AVOID_REENCODING') == '1':
+            log(f'WARN: Skipping video as AVOID_REENCODING: {video_src}')
+            return False
+
         if len(videos) != 1:
             log(f'ERROR: Abnormal number of video streams: {len(videos)} in {video_src}')
             return False
@@ -285,6 +294,7 @@ class Processor:
         import ui_rich
         self.is_working = True
         self.que.reload()
+        log(f'FILE_STRATEGY: {defs.FILE_STRATEGY}', do_print=True)
         log(f'Input lines: {len(self.que.lines)}', do_print=True)
         log('Collecting tasks...', do_print=True)
         tasks = self.load_tasks()
