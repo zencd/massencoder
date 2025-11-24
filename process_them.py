@@ -16,7 +16,7 @@ import defs
 import utils
 import verify
 from helper import get_video_meta, log, calc_fps, log_clear, BadVideoFile
-from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, getch, get_item
+from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, getch, get_item, glob_videos
 
 # todo removing `from ui_terminal import UiTerminal` leads to error: AttributeError: module 'rich' has no attribute 'console'
 # todo removing `from ui_terminal import UiTerminal` leads to error: AttributeError: module 'rich' has no attribute 'console'
@@ -188,7 +188,9 @@ class Processor:
                                            os.path.isfile(fn) and \
                                            os.path.getsize(fn) > 0 and \
                                            not os.path.basename(fn).startswith('._')
-        files_to_process = [fn for fn in self.que.lines if file_is_ok_to_process(fn)]
+        lines = self.que.lines
+        lines = glob_videos(lines)
+        files_to_process = [fn for fn in lines if file_is_ok_to_process(fn)]
         files_to_process = list(dict.fromkeys(files_to_process))  # del duplicates, preserving order
         tasks: list[EncodingTask] = list(map(self.path_to_task, files_to_process))
         tasks = list(filter(bool, tasks))
@@ -236,7 +238,7 @@ class Processor:
         if len(videos) != 1:
             log(f'ERROR: Abnormal number of video streams: {len(videos)} in {video_src}')
             return False
-        if videos[0]['codec_name'] in {'hevc', 'vp9'}:
+        if videos[0]['codec_name'].lower() in {'hevc', 'vp9'}:
             # log(f'WARN: Video is H265 already: {video_src}')
             return False
 

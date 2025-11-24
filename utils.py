@@ -1,18 +1,13 @@
-import shutil
+import datetime
+import glob
 import os
 import platform
 import re
+import shutil
 import sys
-import datetime
-import time
+import threading
 from pathlib import Path
 from typing import Union
-import threading
-
-import sys
-import platform
-
-import defs
 
 if platform.system() == 'Windows':
     import msvcrt
@@ -140,6 +135,22 @@ def calc_progress(amount_processed: float, total_amount: float, elapsed: datetim
 
 def get_item(list_: list, index: int, fallback):
     return fallback if len(list_) >= index else list_[index]
+
+
+def is_video(path: str):
+    return re.match(r'.*\.(mp4|mkv|avi|mov|wmv|flv|webm|m4v|ts|vob|mpg|mpeg|3gp|ogv|m2ts|mts)$', path, re.IGNORECASE)
+
+
+def glob_videos(files: list[str]):
+    globbed = []
+    for file in files:
+        if os.path.isdir(file):
+            for file2 in glob.glob(f'{file}/*', recursive=False):
+                if os.path.isfile(file2) and is_video(file2):
+                    globbed.append(file2)
+        elif os.path.isfile(file):
+            globbed.append(file)
+    return globbed
 
 
 class PersistentList:
