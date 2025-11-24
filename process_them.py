@@ -5,7 +5,6 @@ import shlex
 import subprocess
 import sys
 import threading
-import time
 import traceback
 import typing
 from pathlib import Path
@@ -17,11 +16,12 @@ import defs
 import utils
 import verify
 from helper import get_video_meta, log, calc_fps, log_clear, BadVideoFile
-from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, getch
+from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, getch, get_item
 
 # todo removing `from ui_terminal import UiTerminal` leads to error: AttributeError: module 'rich' has no attribute 'console'
 # todo removing `from ui_terminal import UiTerminal` leads to error: AttributeError: module 'rich' has no attribute 'console'
 from ui_terminal import UiTerminal
+type(UiTerminal)
 
 STATUS_AWAITING = 'Awaiting'
 STATUS_RUNNING = 'Running'
@@ -73,7 +73,7 @@ class EncodingTask:
 
 class Processor:
 
-    def __init__(self):
+    def __init__(self, que_file: Path):
         import defs
         super().__init__()
         self.is_working = False
@@ -81,9 +81,9 @@ class Processor:
         self.recent_task: typing.Optional['EncodingTask'] = None
         self.total_src_seconds = 0  # todo del?
         self.defs = defs
-        self.que = PersistentList('list-que.txt')
-        self.success = PersistentList('list-success.txt')
-        self.errors = PersistentList('list-error.txt')
+        self.que = PersistentList(que_file)
+        self.success = PersistentList(que_file.parent / 'list-success.txt')
+        self.errors = PersistentList(que_file.parent / 'list-error.txt')
         self.tasks: list[EncodingTask] = []
         # self.ui = UiTerminal()
         self.console = rich.console.Console()
@@ -382,5 +382,7 @@ class Processor:
 
 
 if __name__ == '__main__':
+    default_que_file = os.path.join(defs.PROJECT_DIR, 'list-que.txt')
+    que_file = get_item(sys.argv, 1, default_que_file)
     utils.ensure_terminal()
-    Processor().start()
+    Processor(Path(que_file)).start()

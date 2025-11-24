@@ -12,22 +12,32 @@ import threading
 import sys
 import platform
 
+import defs
+
 if platform.system() == 'Windows':
     import msvcrt
+
+
     def ensure_terminal():
         pass
+
+
     def getch():
         # 'ignore/replace' because UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe0 in position 0: unexpected end of data
         return msvcrt.getch().decode(errors='ignore')
 else:
     import tty
     import termios
+
+
     def ensure_terminal():
         try:
             termios.tcgetattr(sys.stdin.fileno())
         except termios.error:
             print('Enable terminal emulation in IDE to continue')
             sys.exit(1)
+
+
     def getch():
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
@@ -128,18 +138,20 @@ def calc_progress(amount_processed: float, total_amount: float, elapsed: datetim
     return 0, 0, 0
 
 
+def get_item(list_: list, index: int, fallback):
+    return fallback if len(list_) >= index else list_[index]
+
+
 class PersistentList:
-    def __init__(self, fname: str):
+    def __init__(self, fname):
+        fname = str(fname)
+        assert os.path.isabs(fname) and os.path.isfile(fname), f'Expecting an absolute file. Got: {fname}'
         self.fname = fname
         self.lines: list[str] = read_list(fname) if os.path.exists(self.fname) else []
 
     def add(self, line: str):
         self.lines.append(line)
         write_file(self.fname, '\n'.join(self.lines))
-
-    # def remove(self, line: str):
-    #     self.lines.remove(line)
-    #     write_file(self.fname, '\n'.join(self.lines))
 
     def reload(self):
         self.lines = read_list(self.fname)

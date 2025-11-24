@@ -1,9 +1,12 @@
 import math
+import os.path
 from pathlib import Path
 
 import helper
 from process_them import EncodingTask
 
+PROJECT_DIR = os.path.dirname(__file__)
+PROJECT_PATH = Path(PROJECT_DIR)
 MAX_WORKERS = 1
 THREADS = 4
 MOVE_INPUT_FILE = False
