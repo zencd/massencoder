@@ -1,4 +1,5 @@
 import datetime
+import json
 import os.path
 import re
 import shlex
@@ -7,6 +8,7 @@ import sys
 import threading
 import traceback
 import typing
+from json import JSONDecodeError
 from pathlib import Path
 
 import rich
@@ -29,6 +31,8 @@ STATUS_FINISHED = 'Finished'
 
 RESOLUTION_SUCCESS = 'Success'
 RESOLUTION_ERROR = 'Error'
+
+TAG_AVOID_265 = 'NO265'
 
 
 def print(s):
@@ -92,8 +96,8 @@ class Processor:
 
     def call_ffmpeg(self, video_in: Path, out_file: Path, task: EncodingTask):
         defs = self.defs
-        ff_params = getattr(defs, defs.PARAM_MAKER)(task)
-        custom_params = re.split(r'\s+', ff_params)
+        ff_params: str = getattr(defs, defs.PARAM_MAKER)(task)
+        custom_params = re.split(r'\s+', ff_params.strip())
         cmd = ['ffmpeg', '-hide_banner', '-i', str(video_in)] + custom_params + ['-y', str(out_file)]
         log(f'Exec: {shlex.join(cmd)}')
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8',
@@ -119,6 +123,15 @@ class Processor:
         log(f'call_ffmpeg: returning code {rc}, is_working: {self.is_working}')
         return rc
 
+    def mark_file_as_not_265(self, video_file: Path):
+        cmd = ['videotag', str(video_file), TAG_AVOID_265, '1']
+        log(f'Exec: {shlex.join(cmd)}')
+        with subprocess.Popen(cmd) as proc:
+            proc.wait()
+            rc = proc.returncode & 0xFF
+            if rc != 0:
+                raise Exception(f'Exec failed: {shlex.join(cmd)}')
+
     def resolve_target_video_path(self, video_src: Path, target_dir: Path):
         defs = self.defs
         return (target_dir / video_src.name).with_suffix(f'.{defs.TARGET_EXT}')
@@ -141,6 +154,12 @@ class Processor:
         log(f'ffmpeg finished with rc: {rc} - {task}')
         if rc == 0:
             log(f'ffmpeg finished - verifying it: {out_tmp_file}')
+            if not verify.verify_file_size_reduced_significantly(video_src, out_tmp_file):
+                log(f'INFO: verify_file_size_reduced_significantly failed: {out_tmp_file}')
+                self.mark_file_as_not_265(video_src)
+                self.success.add(str(video_src))
+                task.set_success()
+                return
             if not verify.verify_fast(video_src, out_tmp_file):
                 log(f'ERROR: verify_fast failed: {out_tmp_file}')
                 self.errors.add(str(video_src))
@@ -231,8 +250,14 @@ class Processor:
         videos, audios = task.videos, task.audios
 
         tags = task.format.get('tags') or dict()
-        if tags.get('AVOID_REENCODING') == '1':
-            log(f'WARN: Skipping video as AVOID_REENCODING: {video_src}')
+        tags = tags.get('comment') or '{}'
+        try:
+            tags = json.loads(tags)
+        except JSONDecodeError:
+            tags = dict()
+
+        if tags.get(TAG_AVOID_265) == '1':
+            log(f'INFO: Skipping video as {TAG_AVOID_265}: {video_src}')
             return False
 
         if len(videos) != 1:

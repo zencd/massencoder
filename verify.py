@@ -61,20 +61,24 @@ def replace_in_list(lst: list, src: str, dst: str):
     return [(dst if s == src else s) for s in lst]
 
 
-def verify_fast(src: Path, dst: Path):
-    dur_threshold = 1.5
+def verify_file_size_reduced_significantly(src: Path, dst: Path):
     size_threshold = 0.75
     size1 = src.stat().st_size
     size2 = dst.stat().st_size
     if size2 > size1:
-        log(f'ERROR: file got bigger: 1) {size1//1024//1024} MB {src}')
-        log(f'ERROR: file got bigger: 2) {size2//1024//1024} MB {dst}')
+        log(f'INFO: file got bigger: 1) {(size1/1024/1024):.1f} MB {src}')
+        log(f'INFO: file got bigger: 2) {(size2/1024/1024):.1f} MB {dst}')
         return False
     if size2 / size1 > size_threshold:
-        log(f'ERROR: file got just slightly lighter: 1) {size1//1024//1024} MB {src}')
-        log(f'ERROR: file got just slightly lighter: 2) {size2//1024//1024} MB {dst}')
+        log(f'INFO: file got just slightly lighter: 1) {(size1/1024/1024):.1f} MB {src}')
+        log(f'INFO: file got just slightly lighter: 2) {(size2/1024/1024):.1f} MB {dst}')
         log(f'threshold: {size_threshold}')
         return False
+    log(f'INFO: file got {(size1 / size2):.1f} times lighter {src}')
+    return True
+
+def verify_fast(src: Path, dst: Path):
+    dur_threshold = 1.5
     format1, videos1, audios1, subtitles1, others1 = get_video_meta(src)
     format2, videos2, audios2, subtitles2, others2 = get_video_meta(dst)
     dur1 = float(format1['duration'])

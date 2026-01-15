@@ -20,7 +20,7 @@ assert BASE_DIR.exists(), f'Missing: {BASE_DIR}'
 OUT_DIR = BASE_DIR / 'reenc-done-output'
 PROCESSED_INPUT_DIR = BASE_DIR / 'reenc-done-input'
 TMP_OUT_DIR = BASE_DIR / 'reenc-work'
-TARGET_EXT = 'mkv'
+TARGET_EXT = 'mp4'
 WAIT_TIMEOUT = 60.0
 # PARAM_MAKER = 'ffmpeg_265_128'
 PARAM_MAKER = 'ffmpeg_265_copy'
@@ -56,15 +56,24 @@ def video_flags_265(task: 'EncodingTask'):
     x265_params = ['open-gop=0', f'keyint={keyint}', 'log-level=error']
     threads_opt = ''
     if THREADS > 0:
-        x265_params.append(f'pools={THREADS}')
-        threads_opt = f'-threads {THREADS}'
+        if encoder == 'libx265':
+            x265_params.append(f'pools={THREADS}')
+        else:
+            threads_opt = f'-threads {THREADS}'
 
-
-    drop_streams = make_exclude_streams_options()
+    drop_streams = make_exclude_streams_options() if TARGET_EXT == 'mkv' else ''
     x265_params_opt = f'-x265-params ' + ':'.join(x265_params) if x265_params else ''
     # use `-c:s srt` to convert all subtitles to SRT (mkv doesn't support some formats)
-    video = f'{threads_opt} -map 0 {drop_streams} -map_metadata -1 -c:v {encoder} {x265_params_opt} -crf 26 -preset medium -pix_fmt yuv420p -c:s copy'
-    container = '-avoid_negative_ts 1 -reset_timestamps 1'
+    tag_hvc_opt = '-tag:v hvc1' if (TARGET_EXT == 'mp4' and encoder == 'libx265') else ''
+    fast_start_opt = '-movflags +faststart' if TARGET_EXT == 'mp4' else ''
+    video = f'{threads_opt} -map 0 {drop_streams} -map_metadata -1 -c:v {encoder} {x265_params_opt} -crf 26 -preset medium -pix_fmt yuv420p -c:s copy {tag_hvc_opt} {fast_start_opt}'
+
+    if TARGET_EXT == 'mkv':
+        container = '-avoid_negative_ts 1 -reset_timestamps 1'
+    elif TARGET_EXT == 'mp4':
+        container = '-reset_timestamps 1'
+    else:
+        raise Exception('Unsupported')
 
     # verification
     tmp = f'{video} {container}'
