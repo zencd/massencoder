@@ -12,6 +12,7 @@ from json import JSONDecodeError
 from pathlib import Path
 
 import rich
+import rich.console
 from wakepy.modes import keep
 
 import defs
@@ -22,8 +23,8 @@ from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, getch, 
 
 # todo removing `from ui_terminal import UiTerminal` leads to error: AttributeError: module 'rich' has no attribute 'console'
 # todo removing `from ui_terminal import UiTerminal` leads to error: AttributeError: module 'rich' has no attribute 'console'
-from ui_terminal import UiTerminal
-type(UiTerminal)
+# from ui_terminal import UiTerminal
+# type(UiTerminal)
 
 STATUS_AWAITING = 'Awaiting'
 STATUS_RUNNING = 'Running'
@@ -318,7 +319,7 @@ class Processor:
                 break
 
     def start_impl(self):
-        import ui_rich
+        import ui_terminal
         self.is_working = True
         self.que.reload()
         log(f'FILE_STRATEGY: {defs.FILE_STRATEGY}', do_print=True)
@@ -335,7 +336,7 @@ class Processor:
         self.time_started = datetime.datetime.now()
         self.try_start_new_tasks()
 
-        progress_thread = threading.Thread(target=ui_rich.progress_function, args=[self, tasks], daemon=True)
+        progress_thread = threading.Thread(target=ui_terminal.progress_function, args=[self, tasks], daemon=True)
         progress_thread.start()
 
         wait_thread = threading.Thread(target=self.wait_for_all_threads, args=[], daemon=False)

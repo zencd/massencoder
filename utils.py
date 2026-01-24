@@ -144,8 +144,9 @@ def is_video(path: str):
 def glob_videos(files: list[str]):
     globbed = []
     for file in files:
-        if os.path.isdir(file):
-            for file2 in glob.glob(f'{file}/*', recursive=False):
+        if os.path.isdir(file) or ('*' in file):
+            file = f'{file}/*' if os.path.isdir(file) else file
+            for file2 in glob.glob(file, recursive=True):
                 if os.path.isfile(file2) and is_video(file2):
                     globbed.append(file2)
         elif os.path.isfile(file):
