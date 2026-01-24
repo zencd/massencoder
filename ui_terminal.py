@@ -15,11 +15,11 @@ def progress_function(p: 'Processor', tasks: list['EncodingTask']):
 
         tasks_current = [t for t in tasks if t.status == STATUS_RUNNING]
 
-        print("\033c", end="")
+        print("\033c", end="") # clear screen
         speed_sum = 0.0
         for task_group in [tasks_current]:
             for task in task_group:
-                status, color = task_color(task)
+                status = task_status(task)
                 pixels_processed = task.pixels_per_frame * task.fps * task.seconds_processed
                 percent2, eta2, speed2 = calc_progress(pixels_processed, task.pixels_total, t2 - task.time_started) \
                     if not task.finished \
@@ -49,16 +49,11 @@ def progress_function(p: 'Processor', tasks: list['EncodingTask']):
     log('progress_function finished')
 
 
-def task_color(task: 'EncodingTask'):
-    from process_them import STATUS_RUNNING, RESOLUTION_SUCCESS, RESOLUTION_ERROR, STATUS_AWAITING
+def task_status(task: 'EncodingTask'):
+    from process_them import RESOLUTION_SUCCESS, RESOLUTION_ERROR
     if task.resolution == RESOLUTION_SUCCESS:
-        return 'OK', 'dark_sea_green4'
+        return 'OK'
     elif task.resolution == RESOLUTION_ERROR:
-        return 'ERROR', 'bright_red'
+        return 'ERROR'
     else:
-        if task.status == STATUS_RUNNING:
-            return task.status, 'turquoise2'
-        elif task.status == STATUS_AWAITING:
-            return task.status, 'bright_black'
-        else:
-            return task.status, 'bright_yellow'
+        return task.status
