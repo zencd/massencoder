@@ -6,7 +6,10 @@ from utils import calc_progress, hms
 
 
 def progress_function(p: 'Processor', tasks: list['EncodingTask']):
-    from process_them import STATUS_RUNNING
+    from process_them import STATUS_RUNNING, EncodingTask, RESOLUTION_SUCCESS, RESOLUTION_ERROR
+
+    def task_status(task: EncodingTask):
+        return 'OK' if task.resolution == RESOLUTION_SUCCESS else 'ERROR' if task.resolution == RESOLUTION_ERROR else task.status
 
     defs = p.defs
     t1 = datetime.datetime.now()
@@ -15,7 +18,10 @@ def progress_function(p: 'Processor', tasks: list['EncodingTask']):
 
         tasks_current = [t for t in tasks if t.status == STATUS_RUNNING]
 
-        print("\033c", end="") # clear screen
+        # clear screen
+        # print("\033c", end="")
+        print("\033[2J\033[H", end="")
+
         speed_sum = 0.0
         for task_group in [tasks_current]:
             for task in task_group:
@@ -47,13 +53,3 @@ def progress_function(p: 'Processor', tasks: list['EncodingTask']):
 
         time.sleep(defs.UI_REFRESH_PAUSE)
     log('progress_function finished')
-
-
-def task_status(task: 'EncodingTask'):
-    from process_them import RESOLUTION_SUCCESS, RESOLUTION_ERROR
-    if task.resolution == RESOLUTION_SUCCESS:
-        return 'OK'
-    elif task.resolution == RESOLUTION_ERROR:
-        return 'ERROR'
-    else:
-        return task.status
