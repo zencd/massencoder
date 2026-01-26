@@ -75,6 +75,17 @@ class EncodingTask:
         self.status = STATUS_FINISHED
         self.resolution = RESOLUTION_SUCCESS
 
+    def get_tags(self):
+        tags = self.format.get('tags') or dict()
+        tags = tags.get('comment') or '{}'
+        try:
+            tags = json.loads(tags)
+        except JSONDecodeError:
+            tags = dict()
+        tags = tags if isinstance(tags, dict) else dict()
+        return tags
+
+
 
 class Processor:
 
@@ -249,13 +260,7 @@ class Processor:
     def filter_videos(self, task: EncodingTask):
         video_src = task.video_src
         videos, audios = task.videos, task.audios
-
-        tags = task.format.get('tags') or dict()
-        tags = tags.get('comment') or '{}'
-        try:
-            tags = json.loads(tags)
-        except JSONDecodeError:
-            tags = dict()
+        tags = task.get_tags()
 
         if tags.get(TAG_AVOID_265) == '1':
             log(f'INFO: Skipping video as {TAG_AVOID_265}: {video_src}')
@@ -319,7 +324,8 @@ class Processor:
                 break
 
     def start_impl(self):
-        import ui_terminal
+        import ui_rich
+        # import ui_terminal
         self.is_working = True
         self.que.reload()
         log(f'FILE_STRATEGY: {defs.FILE_STRATEGY}', do_print=True)
@@ -336,7 +342,7 @@ class Processor:
         self.time_started = datetime.datetime.now()
         self.try_start_new_tasks()
 
-        progress_thread = threading.Thread(target=ui_terminal.progress_function, args=[self, tasks], daemon=True)
+        progress_thread = threading.Thread(target=ui_rich.progress_function, args=[self, tasks], daemon=True)
         progress_thread.start()
 
         wait_thread = threading.Thread(target=self.wait_for_all_threads, args=[], daemon=False)

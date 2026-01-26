@@ -19,8 +19,8 @@ def progress_function(p: 'Processor', tasks: list['EncodingTask']):
         tasks_current = [t for t in tasks if t.status == STATUS_RUNNING]
 
         # clear screen
-        # print("\033c", end="")
-        print("\033[2J\033[H", end="")
+        print("\033c", end="")
+        # print("\033[2J\033[H", end="")
 
         speed_sum = 0.0
         for task_group in [tasks_current]:

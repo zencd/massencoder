@@ -1,14 +1,9 @@
 import datetime
-import math
-import statistics
 import time
 
 from helper import log
+from process_them import Processor, EncodingTask, STATUS_RUNNING, RESOLUTION_SUCCESS, RESOLUTION_ERROR, STATUS_AWAITING
 from utils import calc_progress, hms
-
-from process_them import Processor, EncodingTask, STATUS_RUNNING, STATUS_FINISHED, RESOLUTION_SUCCESS, \
-    RESOLUTION_ERROR, \
-    STATUS_AWAITING
 
 
 def progress_function(p: Processor, tasks: list[EncodingTask]):
@@ -18,6 +13,8 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
         t2 = datetime.datetime.now()
 
         tasks_current = [t for t in tasks if t.status == STATUS_RUNNING]
+
+        print_lines = []
 
         p.console.clear()
         speed_sum = 0.0
@@ -33,7 +30,7 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
                     if not task.finished \
                     else 0
                 msg = f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)} {speed2:5.2f}x {task.bit_rate_kilo:4d}k {task.fps:.2f}fps {task.video_src}'
-                p.console.print(msg)
+                print_lines.append(msg)
                 speed_sum += speed2
 
         total_pixels_processed = sum(t.pixels_per_frame * t.fps * t.seconds_processed for t in tasks)
@@ -47,7 +44,7 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
         msg = f'{msg} | stopping softly' if p.stopping_softly else msg
         msg = f'{msg} | not working' if not p.is_working else msg
         msg = f'{msg}'
-        p.console.print(msg)
+        print_lines.append(msg)
 
         # alternate ETA - via video time
         # sec_processed = sum(t.seconds_processed for t in tasks)
@@ -58,7 +55,9 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
         #     msg = f'[white]{passed} * {sec_total} / {sec_processed} - {passed} = {eta} = {hms(eta)}'
         #     p.console.print(msg)
 
-        p.console.print('[white on black] [yellow]Q[/]uit now [/] [white on black] [yellow]S[/]top softly [/]')
+        print_lines.append('[white on black] [yellow]Q[/]uit now [/] [white on black] [yellow]S[/]top softly [/]')
+
+        p.console.print('\r\n'.join(print_lines))
 
         time.sleep(defs.UI_REFRESH_PAUSE)
     log('progress_function finished')
