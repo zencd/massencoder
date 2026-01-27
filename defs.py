@@ -90,7 +90,7 @@ def video_flags_265(task: 'EncodingTask'):
     return video, container
 
 
-def audio_flags_128():
+def audio_flags_aac_128():
     return f'-c:a aac -b:a 128k -ac 2'
 
 
@@ -100,11 +100,14 @@ def audio_flags_copy():
 
 def ffmpeg_265_128(task: 'EncodingTask'):
     video, container = video_flags_265(task)
-    audio = audio_flags_128()
+    audio = audio_flags_aac_128()
     return f'{video} {audio} {container}'
 
 
 def ffmpeg_265_copy(task: 'EncodingTask'):
     video, container = video_flags_265(task)
-    audio = audio_flags_copy()
+    if not_aac := any(a for a in task.audios if a.get('codec_name') != 'aac'):
+        audio = audio_flags_aac_128()
+    else:
+        audio = audio_flags_copy()
     return f'{video} {audio} {container}'
