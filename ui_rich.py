@@ -16,19 +16,14 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
 
         print_lines = []
 
-        p.console.clear()
         speed_sum = 0.0
         for task_group in [tasks_current]:
             for task in task_group:
                 status, color = task_color(task)
                 pixels_processed = task.pixels_per_frame * task.fps * task.seconds_processed
-                percent2, eta2, speed2 = calc_progress(pixels_processed, task.pixels_total, t2 - task.time_started) \
-                    if not task.finished \
-                    else (0, 0, 0)
+                percent2, eta2, speed2 = calc_progress(pixels_processed, task.pixels_total, t2 - task.time_started)
                 speed2 = speed2 / (task.pixels_per_frame * task.fps)
-                took2 = (t2 - task.time_started).total_seconds() \
-                    if not task.finished \
-                    else 0
+                took2 = 0 if task.finished else (t2 - task.time_started).total_seconds()
                 msg = f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)} {speed2:5.2f}x {task.bit_rate_kilo:4d}k {task.fps:.2f}fps {task.video_src}'
                 print_lines.append(msg)
                 speed_sum += speed2
@@ -40,7 +35,7 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
         # speed1 = speed1 / speed_divisor_avg
         num_tasks_remaining = sum(1 for t in tasks if not t.finished)
 
-        msg = f'[white]Total: {percent1:.3f}% ETA {hms(eta1)} {speed_sum:5.2f}x | {num_tasks_remaining} remains | {p.max_workers}x{defs.THREADS}'
+        msg = f'[white]Total: {percent1:.3f}% ETA {hms(eta1)} {speed_sum:5.2f}x | {num_tasks_remaining}/{len(tasks)} remains | {p.max_workers}x{defs.THREADS}'
         msg = f'{msg} | stopping softly' if p.stopping_softly else msg
         msg = f'{msg} | not working' if not p.is_working else msg
         msg = f'{msg}'
@@ -57,7 +52,8 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
 
         print_lines.append('[white on black] [yellow]Q[/]uit now [/] [white on black] [yellow]S[/]top softly [/]')
 
-        p.console.print('\r\n'.join(print_lines))
+        p.console.clear()
+        p.console.print('\n'.join(print_lines))
 
         time.sleep(defs.UI_REFRESH_PAUSE)
     log('progress_function finished')
