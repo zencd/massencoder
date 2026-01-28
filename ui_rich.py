@@ -13,6 +13,7 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
         t2 = datetime.datetime.now()
 
         tasks_running = [t for t in tasks if t.status == STATUS_RUNNING]
+        tasks_finished = [t for t in tasks if t.finished]
         tasks_not_finished = [t for t in tasks if not t.finished]
 
         print_lines = []
@@ -28,8 +29,10 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
             print_lines.append(msg)
             speed_sum += speed2
 
-        total_pixels_processed = sum(t.pixels_per_frame * t.fps * t.seconds_processed for t in tasks_not_finished)
-        total_pixels = sum(t.pixels_total for t in tasks_not_finished)
+        tpp1 = sum(t.pixels_per_frame * t.fps * t.seconds_processed for t in tasks_not_finished)
+        tpp2 = sum(t.pixels_per_frame * t.fps * t.video_len for t in tasks_finished)
+        total_pixels_processed = tpp1 + tpp2
+        total_pixels = sum(t.pixels_total for t in tasks)
         percent1, eta1, speed1 = calc_progress(total_pixels_processed, total_pixels, t2 - t1)
 
         msg = f'[white]Total: {percent1:.3f}% ETA {hms(eta1)} {speed_sum:5.2f}x | {len(tasks_not_finished)}/{len(tasks)} remains | {p.max_workers}x{defs.THREADS}'

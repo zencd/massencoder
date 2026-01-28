@@ -62,7 +62,7 @@ def replace_in_list(lst: list, src: str, dst: str):
 
 
 def verify_file_size_reduced_significantly(src: Path, dst: Path):
-    size_threshold = 0.75
+    size_threshold = 0.7
     size1 = src.stat().st_size
     size2 = dst.stat().st_size
     if size2 > size1:

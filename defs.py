@@ -39,16 +39,15 @@ UI_REFRESH_PAUSE = 1.0
 
 def video_flags_265(task: 'EncodingTask'):
     def make_exclude_streams_options():
-        if TARGET_EXT == 'mkv':
-            # adding options like `-map -0:2` to exclude streams not supported by mkv
-            # mkv supports only: video, audio, subtitle
-            drop_list = []
-            fmt, videos, audios, subtitles, others = helper.get_video_meta(task.video_src)
-            for s in others:
-                drop_list.append('-map')
-                drop_list.append(f'-0:{s['index']}')
-            return ' '.join(drop_list)
-        return ''
+        # here we are adding options like `-map -0:2` to exclude streams not supported by container
+        # mkv supports only: video, audio, subtitle
+        # mp4 does not support: data/mp4s
+        drop_list = []
+        fmt, videos, audios, subtitles, others = helper.get_video_meta(task.video_src)
+        for s in others:
+            drop_list.append('-map')
+            drop_list.append(f'-0:{s['index']}')
+        return ' '.join(drop_list)
 
     encoder = 'libx265'
     keyint = math.ceil(task.fps * GOP_SIZE_SECONDS)
@@ -61,7 +60,7 @@ def video_flags_265(task: 'EncodingTask'):
         else:
             threads_opt = f'-threads {THREADS}'
 
-    drop_streams = make_exclude_streams_options() if TARGET_EXT == 'mkv' else ''
+    drop_streams = make_exclude_streams_options()
     x265_params_opt = f'-x265-params ' + ':'.join(x265_params) if x265_params else ''
     # use `-c:s srt` to convert all subtitles to SRT (mkv doesn't support some formats)
     tag_hvc_opt = '-tag:v hvc1' if (TARGET_EXT == 'mp4' and encoder == 'libx265') else ''

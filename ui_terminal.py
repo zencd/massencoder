@@ -34,7 +34,7 @@ def progress_function(p: 'Processor', tasks: list['EncodingTask']):
             speed_sum += speed2
 
         total_pixels_processed = sum(t.pixels_per_frame * t.fps * t.seconds_processed for t in tasks_not_finished)
-        total_pixels = sum(t.pixels_total for t in tasks_not_finished)
+        total_pixels = sum(t.pixels_total for t in tasks)
         percent1, eta1, speed1 = calc_progress(total_pixels_processed, total_pixels, t2 - t1)
 
         msg = f'Total: {percent1:.3f}% ETA {hms(eta1)} {speed_sum:5.2f}x | {len(tasks_not_finished)} remains | {p.max_workers}x{defs.THREADS}'
