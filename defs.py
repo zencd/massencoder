@@ -41,12 +41,16 @@ def video_flags_265(task: 'EncodingTask'):
     def make_exclude_streams_options():
         # here we are adding options like `-map -0:2` to exclude streams not supported by container
         # mkv supports only: video, audio, subtitle
-        # mp4 does not support: data/mp4s
+        # mp4 does not support: data/mp4s, subtitles/subrip
         drop_list = []
         fmt, videos, audios, subtitles, others = helper.get_video_meta(task.video_src)
         for s in others:
             drop_list.append('-map')
             drop_list.append(f'-0:{s['index']}')
+        for s in subtitles:
+            if TARGET_EXT == 'mp4' and s.get('codec_name') == 'subrip':
+                drop_list.append('-map')
+                drop_list.append(f'-0:{s['index']}')
         return ' '.join(drop_list)
 
     encoder = 'libx265'
