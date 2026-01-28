@@ -12,43 +12,30 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
     while p.is_working:
         t2 = datetime.datetime.now()
 
-        tasks_current = [t for t in tasks if t.status == STATUS_RUNNING]
+        tasks_running = [t for t in tasks if t.status == STATUS_RUNNING]
+        tasks_not_finished = [t for t in tasks if not t.finished]
 
         print_lines = []
 
         speed_sum = 0.0
-        for task_group in [tasks_current]:
-            for task in task_group:
-                status, color = task_color(task)
-                pixels_processed = task.pixels_per_frame * task.fps * task.seconds_processed
-                percent2, eta2, speed2 = calc_progress(pixels_processed, task.pixels_total, t2 - task.time_started)
-                speed2 = speed2 / (task.pixels_per_frame * task.fps)
-                took2 = 0 if task.finished else (t2 - task.time_started).total_seconds()
-                msg = f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)} {speed2:5.2f}x {task.bit_rate_kilo:4d}k {task.fps:.2f}fps {task.video_src}'
-                print_lines.append(msg)
-                speed_sum += speed2
+        for task in tasks_running:
+            status, color = task_color(task)
+            pixels_processed = task.pixels_per_frame * task.fps * task.seconds_processed
+            percent2, eta2, speed2 = calc_progress(pixels_processed, task.pixels_total, t2 - task.time_started)
+            speed2 = speed2 / (task.pixels_per_frame * task.fps)
+            took2 = 0 if task.finished else (t2 - task.time_started).total_seconds()
+            msg = f'[{color}]{status:10s} {hms(took2)} → {hms(eta2)} {speed2:5.2f}x {task.bit_rate_kilo:4d}k {task.fps:.2f}fps {task.video_src}'
+            print_lines.append(msg)
+            speed_sum += speed2
 
-        total_pixels_processed = sum(t.pixels_per_frame * t.fps * t.seconds_processed for t in tasks)
-        total_pixels = sum(t.pixels_total for t in tasks)
-        # speed_divisor_avg = sum(t.pixels_per_frame * t.fps for t in tasks) / len(tasks)
+        total_pixels_processed = sum(t.pixels_per_frame * t.fps * t.seconds_processed for t in tasks_not_finished)
+        total_pixels = sum(t.pixels_total for t in tasks_not_finished)
         percent1, eta1, speed1 = calc_progress(total_pixels_processed, total_pixels, t2 - t1)
-        # speed1 = speed1 / speed_divisor_avg
-        num_tasks_remaining = sum(1 for t in tasks if not t.finished)
 
-        msg = f'[white]Total: {percent1:.3f}% ETA {hms(eta1)} {speed_sum:5.2f}x | {num_tasks_remaining}/{len(tasks)} remains | {p.max_workers}x{defs.THREADS}'
+        msg = f'[white]Total: {percent1:.3f}% ETA {hms(eta1)} {speed_sum:5.2f}x | {len(tasks_not_finished)}/{len(tasks)} remains | {p.max_workers}x{defs.THREADS}'
         msg = f'{msg} | stopping softly' if p.stopping_softly else msg
         msg = f'{msg} | not working' if not p.is_working else msg
-        msg = f'{msg}'
         print_lines.append(msg)
-
-        # alternate ETA - via video time
-        # sec_processed = sum(t.seconds_processed for t in tasks)
-        # if sec_processed > 0:
-        #     passed = int((t2 - t1).total_seconds())
-        #     sec_total = int(sum(t.video_len for t in tasks))
-        #     eta = int(passed * sec_total / sec_processed - passed)
-        #     msg = f'[white]{passed} * {sec_total} / {sec_processed} - {passed} = {eta} = {hms(eta)}'
-        #     p.console.print(msg)
 
         print_lines.append('[white on black] [yellow]Q[/]uit now [/] [white on black] [yellow]S[/]top softly [/]')
 
