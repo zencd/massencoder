@@ -174,13 +174,16 @@ class Processor:
         return rc
 
     def mark_file_as_not_265(self, video_file: Path):
-        cmd = ['videotag', str(video_file), TAG_AVOID_265, '1']
-        log(f'Exec: {shlex.join(cmd)}')
-        with subprocess.Popen(cmd) as proc:
-            proc.wait()
-            rc = proc.returncode & 0xFF
-            if rc != 0:
-                raise Exception(f'Exec failed: {shlex.join(cmd)}')
+        if os.name == 'nt':
+            log('mark_file_as_not_265: windows not supported yet')
+        else:
+            cmd = ['videotag', str(video_file), TAG_AVOID_265, '1']
+            log(f'Exec: {shlex.join(cmd)}')
+            with subprocess.Popen(cmd) as proc:
+                proc.wait()
+                rc = proc.returncode & 0xFF
+                if rc != 0:
+                    raise Exception(f'Exec failed: {shlex.join(cmd)}')
 
     def resolve_target_video_path(self, video_src: Path, target_dir: Path):
         defs = self.defs
