@@ -33,7 +33,7 @@ FILE_STRATEGY = FILE_STRATEGY_REPLACE_SOURCE
 
 UI_REFRESH_PAUSE = 1.0
 
-SHRUNK_RATIO_MIN = 0.7
+SHRUNK_RATIO_MIN = 0.75
 
 
 # `-map 0` -- otherwise ffmpeg will skip alternate audio tracks: 2nd one and others

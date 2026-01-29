@@ -111,8 +111,8 @@ class Processor:
         defs = self.defs
 
         ss = int(task.video_len / 2)
-        small_len = 60
-        if task.video_len < small_len * 3:
+        small_len = 120
+        if task.video_len < small_len * 4:
             return True # skip a very small video
         small_src = tempfile.mktemp(suffix=f'.{defs.TARGET_EXT}')
         cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-ss', str(ss), '-t', str(small_len), '-i', str(video_in)] + ['-y', str(small_src)]

@@ -35,12 +35,12 @@ def progress_function(p: Processor, tasks: list[EncodingTask]):
         total_pixels = sum(t.pixels_total for t in tasks)
         percent1, eta1, speed1 = calc_progress(total_pixels_processed, total_pixels, t2 - t1)
 
-        msg = f'[white]Total: {percent1:.3f}% ETA {hms(eta1)} {speed_sum:5.2f}x | {len(tasks_not_finished)}/{len(tasks)} remains | {p.max_workers}x{defs.THREADS}'
+        msg = f'[white]Total: {percent1:.3f}% ETA {hms(eta1)} {speed_sum:5.2f}x | {len(tasks_finished)}/{len(tasks)} done | {p.max_workers}x{defs.THREADS}'
         msg = f'{msg} | stopping softly' if p.stopping_softly else msg
         msg = f'{msg} | not working' if not p.is_working else msg
         print_lines.append(msg)
 
-        print_lines.append('[white on black] [yellow]Q[/]uit now [/] [white on black] [yellow]S[/]top softly [/]')
+        print_lines.append('[white on black] [yellow]Q[/]uit now[/] [white on black] [yellow]S[/]top softly[/]')
 
         p.console.clear()
         p.console.print('\n'.join(print_lines))
