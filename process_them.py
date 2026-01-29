@@ -5,6 +5,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 import threading
 import traceback
 import typing
@@ -106,6 +107,43 @@ class Processor:
         self.stopping_softly = False
         self.max_workers = defs.MAX_WORKERS
 
+    def check_if_need_to_process_encoding_a_small_part(self, video_in: Path, task: EncodingTask):
+        defs = self.defs
+
+        ss = int(task.video_len / 2)
+        small_len = 60
+        if task.video_len < small_len * 3:
+            return True # skip a very small video
+        small_src = tempfile.mktemp(suffix=f'.{defs.TARGET_EXT}')
+        cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-ss', str(ss), '-t', str(small_len), '-i', str(video_in)] + ['-y', str(small_src)]
+        log(f'Exec: {shlex.join(cmd)}')
+        rc = subprocess.call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        rc = rc & 0xFF
+        if rc != 0:
+            log(f'Failed to extract a small video from {task}')
+            return False
+
+        ff_params: str = getattr(defs, defs.PARAM_MAKER)(task)
+        custom_params = re.split(r'\s+', ff_params.strip())
+        small_dst = tempfile.mktemp(suffix=f'.{defs.TARGET_EXT}')
+        cmd = ['ffmpeg', '-hide_banner', '-i', str(small_src)] + custom_params + ['-y', str(small_dst)]
+        log(f'Exec: {shlex.join(cmd)}')
+        rc = subprocess.call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        rc = rc & 0xFF
+        if rc != 0:
+            log(f'Failed to encode a small video from {task}')
+            return False
+
+        size1 = Path(small_src).stat().st_size
+        size2 = Path(small_dst).stat().st_size
+        if size2 / size1 > defs.SHRUNK_RATIO_MIN:
+            log(f'INFO: file got just slightly lighter: 1) {(size1 / 1024 / 1024):.1f} MB {video_in} (sub-video)')
+            log(f'INFO: file got just slightly lighter: 2) {(size2 / 1024 / 1024):.1f} MB {video_in}')
+            log(f'threshold: {defs.SHRUNK_RATIO_MIN}')
+            return False
+
+        return True
+
     def call_ffmpeg(self, video_in: Path, out_file: Path, task: EncodingTask):
         defs = self.defs
         ff_params: str = getattr(defs, defs.PARAM_MAKER)(task)
@@ -162,6 +200,13 @@ class Processor:
         log(f'Processing video: {video_src}, duration: {hms(task.video_len)}, started: {task.time_started}')
         out_tmp_file = self.resolve_target_video_path(video_src, defs.TMP_OUT_DIR)
         create_dirs_for_file(out_tmp_file)
+
+        if not self.check_if_need_to_process_encoding_a_small_part(video_src, task):
+            self.mark_file_as_not_265(video_src)
+            self.errors.add(str(video_src))
+            task.set_error()
+            return
+
         rc = self.call_ffmpeg(video_src, out_tmp_file, task)
         log(f'ffmpeg finished with rc: {rc} - {task}')
         if rc == 0:

@@ -33,6 +33,8 @@ FILE_STRATEGY = FILE_STRATEGY_REPLACE_SOURCE
 
 UI_REFRESH_PAUSE = 1.0
 
+SHRUNK_RATIO_MIN = 0.7
+
 
 # `-map 0` -- otherwise ffmpeg will skip alternate audio tracks: 2nd one and others
 # `-map_metadata -1` -- ffmpeg copies metadata from input file by default, which results in misleading tags like: BPS, NUMBER_OF_BYTES, DURATION...
