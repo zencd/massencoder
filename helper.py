@@ -23,6 +23,13 @@ class BadVideoFile(Exception):
     pass
 
 
+def split_video_streams_into_supported_and_unsupported(videos: list[dict]):
+    goods, bads = [], []
+    for v in videos:
+        (goods, bads)[v['codec_name'] in ['mjpeg']].append(v)
+    return goods, bads
+
+
 def get_video_meta(video: Path):
     args = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', str(video)]
     # log(f'Exec: {shlex.join(args)}')

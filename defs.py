@@ -46,6 +46,11 @@ def video_flags_265(task: 'EncodingTask'):
         # mp4 does not support: data/mp4s, subtitles/subrip
         drop_list = []
         fmt, videos, audios, subtitles, others = helper.get_video_meta(task.video_src)
+        videos, unsupported_videos = helper.split_video_streams_into_supported_and_unsupported(videos)
+        assert len(videos) == 1
+        for s in unsupported_videos:
+            drop_list.append('-map')
+            drop_list.append(f'-0:{s['index']}')
         for s in others:
             drop_list.append('-map')
             drop_list.append(f'-0:{s['index']}')
@@ -67,7 +72,7 @@ def video_flags_265(task: 'EncodingTask'):
             threads_opt = f'-threads {THREADS}'
 
     drop_streams = make_exclude_streams_options()
-    x265_params_opt = f'-x265-params ' + ':'.join(x265_params) if x265_params else ''
+    x265_params_opt = (f'-x265-params ' + ':'.join(x265_params)) if x265_params else ''
     # use `-c:s srt` to convert all subtitles to SRT (mkv doesn't support some formats)
     tag_hvc_opt = '-tag:v hvc1' if (TARGET_EXT == 'mp4' and encoder == 'libx265') else ''
     fast_start_opt = '-movflags +faststart' if TARGET_EXT == 'mp4' else ''
@@ -80,7 +85,7 @@ def video_flags_265(task: 'EncodingTask'):
     else:
         raise Exception('Unsupported')
 
-    # verification
+    # self-verification
     tmp = f'{video} {container}'
     if TARGET_EXT == 'mp4' and encoder == 'libx265':
         assert '-tag:v hvc1' in tmp

@@ -19,7 +19,8 @@ from wakepy.modes import keep
 import defs
 import utils
 import verify
-from helper import get_video_meta, log, calc_fps, log_clear, BadVideoFile
+from helper import get_video_meta, log, calc_fps, log_clear, BadVideoFile, \
+    split_video_streams_into_supported_and_unsupported
 from utils import create_dirs_for_file, hms, dhms, beep, PersistentList, getch, get_item, glob_videos
 
 # todo removing `from ui_terminal import UiTerminal` leads to error: AttributeError: module 'rich' has no attribute 'console'
@@ -78,7 +79,7 @@ class EncodingTask:
 
     def get_tags(self):
         tags = self.format.get('tags') or dict()
-        tags = tags.get('comment') or '{}'
+        tags = tags.get('comment') or tags.get('COMMENT') or '{}'
         try:
             tags = json.loads(tags)
         except JSONDecodeError:
@@ -115,7 +116,7 @@ class Processor:
         if task.video_len < small_len * 4:
             return True # skip a very small video
         small_src = tempfile.mktemp(suffix=f'.{defs.TARGET_EXT}')
-        cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-ss', str(ss), '-t', str(small_len), '-i', str(video_in)] + ['-y', str(small_src)]
+        cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-i', str(video_in), '-ss', str(ss), '-t', str(small_len), '-map', '0', '-c', 'copy'] + ['-y', str(small_src)]
         log(f'Exec: {shlex.join(cmd)}')
         rc = subprocess.call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         rc = rc & 0xFF
@@ -278,8 +279,9 @@ class Processor:
     def path_to_task(self, f: str):
         try:
             fmt, videos, audios, subtitles, others = get_video_meta(Path(f))
-            if not videos:
-                log(f'Missing video streams: {f}')
+            videos, unsupported_videos = split_video_streams_into_supported_and_unsupported(videos)
+            if len(videos) != 1:
+                log(f'Expecting exactly 1 video stream among supported, got {len(videos)}: {f}')
                 return None
             codec_name = videos[0]['codec_name']
             if codec_name == 'mjpeg':
@@ -311,7 +313,7 @@ class Processor:
         tags = task.get_tags()
 
         if tags.get(TAG_AVOID_265) == '1':
-            log(f'INFO: Skipping video as {TAG_AVOID_265}: {video_src}')
+            # log(f'INFO: Skipping video as {TAG_AVOID_265}: {video_src}')
             return False
 
         if len(videos) != 1:
